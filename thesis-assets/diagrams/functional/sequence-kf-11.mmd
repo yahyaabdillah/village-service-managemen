@@ -1,0 +1,12 @@
+sequenceDiagram
+autonumber
+actor A as Petugas
+participant UI as Dashboard Admin
+participant APP as DashboardController
+participant DB as Basis Data
+A->>UI: Membuka dashboard
+UI->>APP: Meminta data ringkasan
+APP->>DB: Mengagregasi penduduk dan permohonan
+DB->>APP: Mengembalikan hasil agregasi
+APP-->>UI: Mengirim metrik dan grafik
+UI-->>A: Menampilkan rekapitulasi

@@ -1,0 +1,13 @@
+sequenceDiagram
+autonumber
+actor A as Admin
+participant UI as Master Layanan
+participant APP as AdminCrudController
+participant DB as Basis Data
+A->>UI: Memilih tindakan pengelolaan
+UI->>APP: Mengirim data jenis layanan
+APP->>APP: Memvalidasi data
+APP->>DB: Menyimpan perubahan
+DB->>APP: Mengonfirmasi transaksi
+APP-->>UI: Mengirim status berhasil
+UI-->>A: Menampilkan daftar terbaru

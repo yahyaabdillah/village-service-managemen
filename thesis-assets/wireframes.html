@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wireframe Sistem Pelayanan Desa Ngringo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef1f4; color: #20252b; font: 16px/1.35 Arial, sans-serif; }
+    .wireframe { display: none; width: 1365px; min-height: 768px; margin: 0 auto; background: #fff; }
+    .wireframe.active { display: block; }
+    .bar { height: 70px; border-bottom: 2px solid #444; display: flex; align-items: center; padding: 0 54px; gap: 34px; }
+    .brand { font-weight: 700; font-size: 21px; margin-right: auto; }
+    .nav { color: #555; }
+    .button { border: 2px solid #333; border-radius: 8px; padding: 11px 20px; background: #f7f7f7; font-weight: 700; }
+    .button.dark { background: #333; color: white; }
+    .page { padding: 44px 64px 58px; }
+    .hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 48px; align-items: center; min-height: 300px; }
+    h1 { font-size: 38px; line-height: 1.15; margin: 0 0 18px; }
+    h2 { font-size: 24px; margin: 0 0 18px; }
+    h3 { margin: 0 0 8px; font-size: 17px; }
+    p { margin: 0 0 18px; color: #5c6268; }
+    .placeholder { border: 2px dashed #666; background: repeating-linear-gradient(135deg,#fafafa,#fafafa 12px,#f0f0f0 12px,#f0f0f0 24px); min-height: 210px; display: grid; place-items: center; color: #555; font-weight: 700; }
+    .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+    .card { border: 2px solid #555; border-radius: 10px; padding: 20px; min-height: 125px; background: white; }
+    .icon { width: 42px; height: 42px; border: 2px solid #555; border-radius: 50%; margin-bottom: 14px; }
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 768px; }
+    .sidebar { border-right: 2px solid #444; padding: 32px 22px; background: #f7f7f7; }
+    .sidebar .brand { margin-bottom: 36px; }
+    .menu { border: 1px solid #777; border-radius: 7px; padding: 12px 14px; margin-bottom: 10px; }
+    .menu.active { background: #333; color: #fff; }
+    .content { padding: 34px 42px; }
+    .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin: 24px 0; }
+    .stat { border: 2px solid #555; border-radius: 9px; padding: 18px; }
+    .stat strong { font-size: 28px; display: block; }
+    .charts { display: grid; grid-template-columns: 1.25fr .75fr; gap: 20px; }
+    .chart { border: 2px solid #555; min-height: 245px; padding: 18px; position: relative; }
+    .chart::after { content: ''; position: absolute; inset: 70px 24px 28px; border-left: 2px solid #777; border-bottom: 2px solid #777; background: linear-gradient(155deg, transparent 47%, #777 48%, #777 50%, transparent 51%); }
+    .form-shell { max-width: 1030px; margin: 0 auto; }
+    .steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 22px 0 30px; }
+    .step { border-bottom: 5px solid #aaa; padding: 8px 0; font-weight: 700; }
+    .step.active { border-color: #333; }
+    .form-card { border: 2px solid #555; border-radius: 10px; padding: 26px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    label { display: block; font-weight: 700; margin-bottom: 7px; }
+    .input { height: 46px; border: 2px solid #777; border-radius: 7px; background: #fafafa; }
+    .input.tall { height: 92px; }
+    .actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+    .status-box { display: grid; grid-template-columns: .7fr 1.3fr; gap: 26px; align-items: start; }
+    .timeline { border: 2px solid #555; border-radius: 10px; padding: 24px 28px; }
+    .event { border-left: 4px solid #555; padding: 0 0 24px 22px; position: relative; }
+    .event::before { content: ''; position: absolute; width: 13px; height: 13px; border: 2px solid #333; background: #fff; border-radius: 50%; left: -10px; top: 2px; }
+    .caption { padding: 12px 18px; text-align: center; color: #555; border-top: 1px solid #bbb; }
+  </style>
+</head>
+<body>
+  <section class="wireframe" data-view="home">
+    <header class="bar"><div class="brand">LAYANAN DESA NGRINGO</div><div class="nav">Beranda</div><div class="nav">Layanan</div><div class="nav">Cek Status</div><div class="button">Login Petugas</div></header>
+    <main class="page">
+      <div class="hero">
+        <div><h1>Pelayanan administrasi desa lebih mudah dan transparan</h1><p>Warga dapat memilih layanan, mengirim berkas, dan memantau status permohonan secara daring.</p><span class="button dark">Ajukan Layanan</span> <span class="button">Cek Status</span></div>
+        <div class="placeholder">ILUSTRASI PELAYANAN DESA</div>
+      </div>
+      <h2>Pilih jenis layanan</h2>
+      <div class="cards"><div class="card"><div class="icon"></div><h3>Surat Domisili</h3><p>Informasi singkat dan tombol detail.</p></div><div class="card"><div class="icon"></div><h3>Surat Keterangan Usaha</h3><p>Informasi singkat dan tombol detail.</p></div><div class="card"><div class="icon"></div><h3>Pengaduan Masyarakat</h3><p>Informasi singkat dan tombol detail.</p></div></div>
+    </main><div class="caption">Wireframe Halaman Beranda</div>
+  </section>
+
+  <section class="wireframe" data-view="request">
+    <header class="bar"><div class="brand">LAYANAN DESA NGRINGO</div><div class="nav">Beranda</div><div class="nav">Layanan</div><div class="nav">Cek Status</div></header>
+    <main class="page form-shell"><h1>Form Pengajuan Layanan</h1><p>Surat Keterangan Domisili</p><div class="steps"><div class="step active">1. Identitas</div><div class="step">2. Alamat</div><div class="step">3. Data Tambahan</div><div class="step">4. Berkas</div></div><div class="form-card"><h2>Data Pemohon</h2><div class="grid2"><div><label>NIK</label><div class="input"></div></div><div><label>Nama Lengkap</label><div class="input"></div></div><div><label>Nomor WhatsApp</label><div class="input"></div></div><div><label>Email</label><div class="input"></div></div></div><div class="actions"><div class="button">Batal</div><div class="button dark">Lanjut</div></div></div></main><div class="caption">Wireframe Form Pengajuan Bertahap</div>
+  </section>
+
+  <section class="wireframe" data-view="status">
+    <header class="bar"><div class="brand">LAYANAN DESA NGRINGO</div><div class="nav">Beranda</div><div class="nav">Layanan</div><div class="nav">Cek Status</div></header>
+    <main class="page"><h1>Cek Status Pengajuan</h1><p>Masukkan kode pengajuan dan NIK untuk melihat perkembangan layanan.</p><div class="status-box"><div class="form-card"><label>Kode Pengajuan</label><div class="input"></div><br><label>NIK</label><div class="input"></div><div class="actions"><div class="button dark">Cari Pengajuan</div></div></div><div class="timeline"><h2>Status: Sedang Diproses</h2><div class="event"><h3>Pengajuan diterima</h3><p>Data dan berkas berhasil disimpan.</p></div><div class="event"><h3>Berkas diverifikasi</h3><p>Persyaratan telah diperiksa petugas.</p></div><div class="event"><h3>Dokumen diproses</h3><p>Petugas sedang menyiapkan dokumen.</p></div><div class="event"><h3>Selesai</h3><p>Dokumen dapat diunduh setelah diterbitkan.</p></div></div></div></main><div class="caption">Wireframe Halaman Cek Status</div>
+  </section>
+
+  <section class="wireframe" data-view="dashboard">
+    <div class="layout"><aside class="sidebar"><div class="brand">ADMIN DESA</div><div class="menu active">Dashboard</div><div class="menu">Pengajuan Masuk</div><div class="menu">Data Penduduk</div><div class="menu">Jenis Layanan</div><div class="menu">Template Dokumen</div><div class="menu">Pengaduan</div><div class="menu">Laporan Aktivitas</div></aside><main class="content"><h1>Dashboard Pelayanan</h1><p>Ringkasan aktivitas pelayanan Desa Ngringo.</p><div class="stats"><div class="stat"><span>Total Pengajuan</span><strong>128</strong></div><div class="stat"><span>Baru</span><strong>18</strong></div><div class="stat"><span>Diproses</span><strong>12</strong></div><div class="stat"><span>Selesai</span><strong>98</strong></div></div><div class="charts"><div class="chart"><h2>Tren Pengajuan</h2></div><div class="chart"><h2>Status Pengajuan</h2></div></div><br><div class="form-card"><h2>Pengajuan Terbaru</h2><div class="input"></div><br><div class="input"></div></div></main></div><div class="caption">Wireframe Dashboard Admin/Petugas</div>
+  </section>
+  <script>const view=new URLSearchParams(location.search).get('view')||'home';document.querySelector(`[data-view="${view}"]`)?.classList.add('active');</script>
+</body>
+</html>

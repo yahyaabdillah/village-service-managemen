@@ -1,0 +1,52 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.source.file "village_service" {
+  targets = [
+    {
+      __path__    = "/var/log/village-service/laravel*.log",
+      job         = "village-service",
+      application = "laravel",
+    },
+    {
+      __path__    = "/var/log/village-service/security*.log",
+      job         = "village-service",
+      application = "security",
+    },
+    {
+      __path__    = "/var/log/village-service/whatsapp*.log",
+      job         = "village-service",
+      application = "whatsapp",
+    },
+  ]
+
+  file_match {
+    enabled     = true
+    sync_period = "5s"
+  }
+
+  forward_to = [loki.process.village_service.receiver]
+}
+
+loki.process "village_service" {
+  stage.regex {
+    expression = "^\\[(?P<log_time>[^\\]]+)\\]\\s+(?P<laravel_environment>[^.]+)\\.(?P<level>[A-Z]+):"
+  }
+
+  stage.labels {
+    values = {
+      level               = "",
+      laravel_environment = "",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

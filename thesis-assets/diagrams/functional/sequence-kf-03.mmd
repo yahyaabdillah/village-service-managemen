@@ -1,0 +1,12 @@
+sequenceDiagram
+autonumber
+actor A as Masyarakat
+participant UI as Form Pengajuan
+participant APP as Validasi Form
+participant DB as Basis Data
+A->>UI: Mengisi identitas pemohon
+UI->>APP: Memvalidasi format input
+APP->>UI: Mengizinkan tahap berikutnya
+A->>UI: Mengirim pengajuan
+UI-->>APP: Mengirim seluruh data
+APP-->>DB: Menyimpan identitas pada permohonan

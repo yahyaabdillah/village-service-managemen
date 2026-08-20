@@ -1,0 +1,17 @@
+{
+  "project": "village-service-management",
+  "updated_at_utc": "2026-06-30T15:18:36Z",
+  "changes": [
+    "Memperbaiki posisi tanggal surat agar tidak menimpa jabatan Kepala Desa.",
+    "Menambahkan generator tanggal surat Indonesia: letter_date/tanggal_surat = 30 Juni 2026, tempat_tanggal_surat = gringo, 30 Juni 2026.",
+    "Tanggal surat memakai completed_at jika ada, fallback ke tanggal generate saat ini.",
+    "Template resmi semua layanan tetap memakai kop surat, logo, data pemohon, tanda tangan, dan area stempel."
+  ],
+  "verification": [
+    "php artisan test: 36 passed, 220 assertions",
+    "./vendor/bin/pint --test: PASS, 73 files",
+    "Visual PDF check: gringo, 30 Juni 2026 rapi dan tidak overlap"
+  ],
+  "database_export": "database-export/village_service_dump.sql",
+  "env_included": false
+}

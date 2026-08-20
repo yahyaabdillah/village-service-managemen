@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor W as Warga
+    participant UI as Halaman Cek Status
+    participant C as PublicController
+    participant DB as Basis Data
+    participant DL as DocumentDownloadController
+    W->>UI: Masukkan kode pengajuan dan NIK
+    UI->>C: Kirim data pencarian
+    C->>DB: Cari pasangan kode dan NIK
+    alt Tidak ditemukan
+        DB-->>C: Kosong
+        C-->>UI: Pesan tidak ditemukan
+    else Ditemukan
+        DB-->>C: Status dan histori publik
+        C-->>UI: Tampilkan perkembangan
+        opt Dokumen sudah selesai
+            W->>DL: Minta unduh dokumen
+            DL->>DB: Verifikasi kode dan NIK
+            DL-->>W: Kirim dokumen final
+        end
+    end

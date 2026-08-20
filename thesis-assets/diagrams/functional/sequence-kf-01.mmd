@@ -1,0 +1,12 @@
+sequenceDiagram
+autonumber
+actor A as Masyarakat
+participant UI as Antarmuka Web
+participant APP as PublicController
+participant DB as Basis Data
+A->>UI: Membuka portal
+UI->>APP: Meminta halaman publik
+APP->>DB: Mengambil profil dan layanan aktif
+DB->>APP: Mengembalikan data
+APP-->>UI: Merender halaman
+UI-->>A: Menampilkan informasi layanan

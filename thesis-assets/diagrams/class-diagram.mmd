@@ -1,0 +1,21 @@
+classDiagram
+    class User { +id +name +email +password +is_active }
+    class Resident { +id +nik +name +address +phone }
+    class FamilyCard { +id +family_card_number +head_of_family_name }
+    class ServiceType { +id +name +slug +is_active }
+    class ServiceRequirement { +id +name +is_required +allowed_file_types }
+    class ServiceRequest { +id +request_code +applicant_nik +status +submitted_at }
+    class RequestFile { +id +original_name +path +mime_type }
+    class StatusHistory { +id +from_status +to_status +public_note }
+    class DocumentTemplate { +id +name +file_path +is_active }
+    class GeneratedDocument { +id +document_number +file_path +is_active }
+    FamilyCard "1" --> "0..*" Resident
+    ServiceType "1" --> "0..*" ServiceRequirement
+    ServiceType "1" --> "0..*" ServiceRequest
+    Resident "0..1" --> "0..*" ServiceRequest
+    ServiceRequest "1" --> "0..*" RequestFile
+    ServiceRequest "1" --> "1..*" StatusHistory
+    User "1" --> "0..*" StatusHistory
+    ServiceType "1" --> "0..*" DocumentTemplate
+    DocumentTemplate "1" --> "0..*" GeneratedDocument
+    ServiceRequest "1" --> "0..*" GeneratedDocument

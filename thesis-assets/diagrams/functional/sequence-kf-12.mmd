@@ -1,0 +1,12 @@
+sequenceDiagram
+autonumber
+actor A as Petugas
+participant UI as Daftar Pengajuan
+participant APP as ServiceRequestController
+participant DB as Basis Data
+A->>UI: Mengisi kriteria filter
+UI->>APP: Mengirim parameter filter
+APP->>DB: Menjalankan query terfilter
+DB->>APP: Mengembalikan hasil
+APP-->>UI: Merender daftar terfilter
+UI-->>A: Menampilkan hasil filter

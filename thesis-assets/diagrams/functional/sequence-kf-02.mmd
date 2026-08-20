@@ -1,0 +1,13 @@
+sequenceDiagram
+autonumber
+actor A as Petugas
+participant UI as Halaman Login
+participant AUTH as AuthController
+participant DB as Basis Data
+A->>UI: Mengisi email dan kata sandi
+UI->>AUTH: Mengirim kredensial
+AUTH->>DB: Mencari akun aktif
+DB->>AUTH: Mengembalikan akun
+AUTH->>AUTH: Memverifikasi kata sandi
+AUTH-->>UI: Membentuk sesi
+UI-->>A: Menampilkan dashboard

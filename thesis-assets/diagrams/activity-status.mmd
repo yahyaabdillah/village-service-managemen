@@ -1,0 +1,16 @@
+flowchart TD
+    A([Mulai]) --> B[Masukkan kode pengajuan dan NIK]
+    B --> C[Validasi input]
+    C --> D{Permohonan ditemukan?}
+    D -- Tidak --> E[Tampilkan pesan tidak ditemukan]
+    E --> B
+    D -- Ya --> F[Tampilkan status dan riwayat publik]
+    F --> G{Dokumen final tersedia?}
+    G -- Tidak --> H[Tampilkan informasi proses]
+    G -- Ya --> I[Tampilkan tombol unduh]
+    H --> J([Selesai])
+    I --> J
+    classDef actor fill:#e8f1ff,stroke:#315b8a,color:#111;
+    classDef decision fill:#fff4cc,stroke:#9b7b14,color:#111;
+    class A,B,C,F,H,I,J actor;
+    class D,E,G decision;

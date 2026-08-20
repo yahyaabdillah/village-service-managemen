@@ -1,0 +1,14 @@
+sequenceDiagram
+autonumber
+actor A as Masyarakat
+participant UI as Halaman Layanan
+participant APP as PublicController
+participant DB as Basis Data
+A->>UI: Membuka daftar layanan
+UI->>APP: Meminta layanan aktif
+APP->>DB: Mengambil jenis layanan
+DB->>APP: Mengembalikan layanan aktif
+APP->>UI: Menampilkan daftar
+A->>UI: Memilih layanan
+UI-->>APP: Meminta detail layanan
+APP-->>UI: Menampilkan detail dan formulir

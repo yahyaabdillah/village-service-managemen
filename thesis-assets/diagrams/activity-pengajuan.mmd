@@ -1,0 +1,15 @@
+flowchart TD
+    A([Mulai]) --> B[Pilih jenis layanan]
+    B --> C[Isi identitas dan data permohonan]
+    C --> D[Unggah berkas persyaratan]
+    D --> E{Data dan berkas valid?}
+    E -- Tidak --> F[Tampilkan pesan kesalahan]
+    F --> C
+    E -- Ya --> G[Simpan permohonan dan berkas]
+    G --> H[Buat kode pengajuan]
+    H --> I[Tampilkan bukti pengajuan]
+    I --> J([Selesai])
+    classDef actor fill:#e8f1ff,stroke:#315b8a,color:#111;
+    classDef decision fill:#fff4cc,stroke:#9b7b14,color:#111;
+    class A,B,C,D,G,H,I,J actor;
+    class E,F decision;

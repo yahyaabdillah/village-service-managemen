@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<div class="card"><h1>Pengajuan Berhasil</h1><p>Kode pengajuan Anda:</p><h2>{{ $serviceRequest->request_code }}</h2><p>Simpan kode ini untuk cek status bersama NIK.</p><a class="btn" href="{{ route('status.form') }}">Cek Status Pengajuan</a></div>@endsection
