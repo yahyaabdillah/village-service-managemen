@@ -18,7 +18,7 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    'default' => env('LOG_CHANNEL', 'stderr'),
 
     /*
     |--------------------------------------------------------------------------
@@ -52,34 +52,35 @@ return [
 
     'channels' => [
 
-        'stack' => [
-            'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
-            'ignore_exceptions' => false,
-        ],
+      'stack' => [
+    'driver' => 'stack',
+    'channels' => explode(',', (string) env('LOG_STACK', 'stderr')),
+    'ignore_exceptions' => false,
+],
+    'single' => [
+        'driver' => 'single',
+        'path' => '/tmp/laravel.log',
+        'level' => env('LOG_LEVEL', 'debug'),
+        'replace_placeholders' => true,
+    ],
 
-        'single' => [
-            'driver' => 'single',
-            'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'replace_placeholders' => true,
-        ],
+    'daily' => [
+        'driver' => 'daily',
+        'path' => '/tmp/laravel.log',
+        'level' => env('LOG_LEVEL', 'debug'),
+        'days' => env('LOG_DAILY_DAYS', 14),
+        'replace_placeholders' => true,
+    ],
 
-        'daily' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'days' => env('LOG_DAILY_DAYS', 14),
-            'replace_placeholders' => true,
-        ],
-
-        'security' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/security.log'),
-            'level' => env('LOG_SECURITY_LEVEL', 'info'),
-            'days' => env('LOG_SECURITY_DAYS', 30),
-            'replace_placeholders' => true,
-        ],
+'security' => [
+    'driver' => 'monolog',
+    'level' => env('LOG_SECURITY_LEVEL', 'info'),
+    'handler' => StreamHandler::class,
+    'handler_with' => [
+        'stream' => 'php://stderr',
+    ],
+    'processors' => [PsrLogMessageProcessor::class],
+],
 
         'slack' => [
             'driver' => 'slack',
@@ -131,9 +132,9 @@ return [
             'handler' => NullHandler::class,
         ],
 
-        'emergency' => [
-            'path' => storage_path('logs/laravel.log'),
-        ],
+  'emergency' => [
+    'path' => '/tmp/laravel.log',
+],
 
     ],
 
