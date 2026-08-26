@@ -68,9 +68,9 @@ Jalankan bridge dengan PM2/systemd/supervisor jika ingin selalu hidup setelah re
 
 ## Backup
 
-- Gunakan `php artisan backup:run` untuk backup app/private storage dan database SQLite jika dipakai.
+- Gunakan `php artisan backup:run` untuk backup private storage aktif dan database SQLite jika dipakai.
 - Untuk MySQL production, pastikan `mysqldump` tersedia agar `database/mysql.sql` masuk ke archive backup.
-- Backup `storage/app/private` karena berisi dokumen warga dan session WhatsApp.
+- Untuk object storage/Supabase, ikuti `docs/OBJECT_STORAGE.md` dan tetap backup session WhatsApp lokal secara terpisah.
 
 ## Security checklist
 

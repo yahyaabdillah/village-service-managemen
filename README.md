@@ -113,18 +113,8 @@ Includes schema for:
   - jalankan dengan `docker compose -f docker-compose.observability.yml up -d`,
   - panduan operasional tersedia di `docs/OBSERVABILITY.md`.
 - Backup service mendukung SQLite file backup dan optional MySQL dump (`database/mysql.sql`) saat production memakai MySQL dan `mysqldump` tersedia.
-
-Filesystem includes explicit private disk:
-
-```php
-'private' => [
-    'driver' => 'local',
-    'root' => storage_path('app/private'),
-    'serve' => false,
-    'throw' => true,
-    'report' => true,
-]
-```
+- Private storage dapat memakai filesystem lokal atau object storage S3-compatible tanpa mengubah path pada database.
+- Panduan Supabase/object storage dan migrasi file lama: [`docs/OBJECT_STORAGE.md`](docs/OBJECT_STORAGE.md).
 
 ## Demo account
 
