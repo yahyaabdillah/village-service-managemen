@@ -75,7 +75,6 @@ Route::prefix('admin')
         Route::get('/security-logs', [ObservabilityController::class, 'securityLogs'])->middleware(EnsureUserCan::class.':view activity logs')->name('security-logs.index');
         Route::get('/notification-logs', [ObservabilityController::class, 'notificationLogs'])->middleware(EnsureUserCan::class.':view activity logs')->name('notification-logs.index');
         Route::get('/whatsapp', [WhatsAppController::class, 'index'])->middleware(EnsureUserCan::class.':manage notifications')->name('whatsapp.index');
-        Route::post('/whatsapp/start', [WhatsAppController::class, 'start'])->middleware(EnsureUserCan::class.':manage notifications')->name('whatsapp.start');
         Route::post('/whatsapp/disconnect', [WhatsAppController::class, 'disconnect'])->middleware(EnsureUserCan::class.':manage notifications')->name('whatsapp.disconnect');
 
         Route::get('/residents/export', [ResidentImportExportController::class, 'export'])->middleware(EnsureUserCan::class.':manage residents')->name('residents.export');

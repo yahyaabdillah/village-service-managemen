@@ -426,8 +426,6 @@ class SecurityHardeningTest extends TestCase
 
     public function test_whatsapp_linking_page_and_status_notification_hook(): void
     {
-        $statusFile = storage_path('framework/testing/security-whatsapp-status.json');
-        file_put_contents($statusFile, json_encode(['ready' => false, 'state' => 'not_started'], JSON_THROW_ON_ERROR));
         Http::fake([
             '127.0.0.1:3100/send-message' => Http::response(['ok' => true]),
             '127.0.0.1:3100/status' => Http::response([], 503),
@@ -436,7 +434,6 @@ class SecurityHardeningTest extends TestCase
             'whatsapp.enabled' => true,
             'whatsapp.bridge_url' => 'http://127.0.0.1:3100',
             'whatsapp.bridge_token' => 'test-token',
-            'whatsapp.status_file' => $statusFile,
         ]);
         $this->seed();
         $admin = User::where('email', 'admin@desa.test')->firstOrFail();
@@ -444,8 +441,7 @@ class SecurityHardeningTest extends TestCase
         $this->actingAs($admin)->get(route('admin.whatsapp.index'))
             ->assertOk()
             ->assertSee('Tautkan WhatsApp')
-            ->assertSee('Mulai Pairing / Tampilkan QR')
-            ->assertSee(route('admin.whatsapp.start'), false);
+            ->assertSee('Bridge tidak terjangkau');
 
         $request = ServiceRequest::factory()->create([
             'status' => 'submitted',

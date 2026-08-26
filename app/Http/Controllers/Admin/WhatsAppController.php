@@ -16,15 +16,6 @@ class WhatsAppController extends Controller
         ]);
     }
 
-    public function start(WhatsAppNotificationService $whatsApp)
-    {
-        $result = $whatsApp->startBridge();
-
-        return redirect()
-            ->route('admin.whatsapp.index')
-            ->with('status', $result['message']);
-    }
-
     public function disconnect(WhatsAppNotificationService $whatsApp)
     {
         try {

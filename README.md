@@ -99,10 +99,8 @@ Includes schema for:
 - Admin UI polish: sidebar terstruktur, toolbar search/import/export, responsive layout.
 - Pola form konsisten: input sedikit = modal, input sedang = drawer, input banyak (>10 field) = stepper.
 - WhatsApp notification integration via Baileys bridge tanpa Chromium:
-  - menu admin `/admin/whatsapp` untuk status/QR pairing,
-  - tombol **Mulai Pairing / Tampilkan QR** agar admin tidak perlu menjalankan bridge dari terminal,
-  - Node bridge `wa-bridge/server.js`,
-  - command `npm run wa:bridge`,
+  - menu admin `/admin/whatsapp` untuk status/QR pairing (bridge di-fetch lewat HTTP, bukan file lokal),
+  - bridge-nya deploy terpisah, jalan sendiri di branch `service-wa` (biasanya di VPS), dikonfigurasi lewat `WHATSAPP_BRIDGE_URL` dan `WHATSAPP_BRIDGE_TOKEN`,
   - notifikasi otomatis saat status pengajuan berubah,
   - queued job `SendWhatsAppNotification`,
   - database log `notification_logs`,
@@ -137,11 +135,7 @@ php artisan migrate --seed
 php artisan serve
 ```
 
-Untuk WhatsApp bridge:
-
-```bash
-npm run wa:bridge
-```
+Untuk WhatsApp bridge, lihat branch `service-wa` (deploy terpisah, lihat README di branch itu).
 
 ## Verification status
 

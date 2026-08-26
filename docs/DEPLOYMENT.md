@@ -39,32 +39,18 @@ Cron scheduler:
 * * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-## WhatsApp bridge tanpa Docker
+## WhatsApp bridge
 
-Di admin, buka:
+Bridge WhatsApp (Baileys) sekarang deploy terpisah dari aplikasi Laravel ini — lihat branch `service-wa` untuk kode dan panduan deploy-nya (biasanya di VPS, dijalankan via PM2).
 
-```text
-/admin/whatsapp
+Di `.env` Laravel, arahkan ke bridge tersebut:
+
+```env
+WHATSAPP_BRIDGE_URL=http://IP-VPS:3555
+WHATSAPP_BRIDGE_TOKEN=[REDACTED]
 ```
 
-Klik **Mulai Pairing / Tampilkan QR** agar aplikasi menjalankan bridge `whatsapp-web.js` dan menampilkan QR tanpa perlu terminal.
-
-Syarat agar tombol ini bekerja:
-
-- server mengizinkan PHP menjalankan `shell_exec`,
-- command `npm` tersedia untuk user web server,
-- folder `storage/app/private/whatsapp` dan `storage/logs` writable.
-
-Jika ingin menjalankan manual/process manager, command-nya:
-
-```bash
-export WHATSAPP_BRIDGE_TOKEN=[REDACTED]
-export WA_BRIDGE_PORT=3100
-export WA_BRIDGE_STORAGE=storage/app/private/whatsapp
-npm run wa:bridge
-```
-
-Jalankan bridge dengan PM2/systemd/supervisor jika ingin selalu hidup setelah restart.
+Buka `/admin/whatsapp` untuk melihat status koneksi dan scan QR — halaman ini fetch langsung dari bridge lewat HTTP, tidak perlu proses apa pun dijalankan dari Laravel/PHP.
 
 ## Backup
 

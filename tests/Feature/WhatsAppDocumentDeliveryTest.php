@@ -6,7 +6,6 @@ use App\Models\ServiceRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -114,12 +113,4 @@ class WhatsAppDocumentDeliveryTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_bridge_exposes_authenticated_document_endpoint_with_size_validation(): void
-    {
-        $server = File::get(base_path('wa-bridge/server.js'));
-
-        $this->assertStringContainsString("app.post('/send-document'", $server);
-        $this->assertStringContainsString("Buffer.from(document, 'base64')", $server);
-        $this->assertStringContainsString('MAX_DOCUMENT_BYTES', $server);
-    }
 }

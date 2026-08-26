@@ -6,7 +6,6 @@ use App\Jobs\SendWhatsAppNotification;
 use App\Models\GeneratedDocument;
 use App\Models\NotificationLog;
 use App\Models\ServiceRequest;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -15,8 +14,6 @@ use Throwable;
 
 class WhatsAppNotificationService
 {
-    public function __construct(private readonly WindowsDetachedProcessLauncher $windowsLauncher) {}
-
     public function notifyStatusChanged(ServiceRequest $serviceRequest, string $status, ?string $note = null): void
     {
         if (! config('whatsapp.enabled') || blank($serviceRequest->phone)) {
@@ -138,204 +135,70 @@ class WhatsAppNotificationService
         }
     }
 
-    public function startBridge(): array
-    {
-        $storage = dirname((string) config('whatsapp.status_file'));
-        if (! is_dir($storage)) {
-            mkdir($storage, 0755, true);
-        }
-        if (! is_dir(dirname((string) config('whatsapp.bridge_log_file')))) {
-            mkdir(dirname((string) config('whatsapp.bridge_log_file')), 0755, true);
-        }
-
-        if ($this->isBridgeRunning()) {
-            return ['started' => false, 'running' => true, 'message' => 'Bridge WhatsApp sudah berjalan.'];
-        }
-
-        file_put_contents((string) config('whatsapp.status_file'), json_encode([
-            'ready' => false,
-            'state' => 'starting_from_admin',
-            'updated_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT));
-
-        $pid = PHP_OS_FAMILY === 'Windows'
-            ? $this->startBridgeOnWindows($storage)
-            : $this->startBridgeOnUnix($storage);
-
-        if ($pid !== '') {
-            file_put_contents((string) config('whatsapp.bridge_pid_file'), $pid);
-        }
-
-        return ['started' => true, 'running' => $pid !== '', 'pid' => $pid, 'message' => 'Bridge WhatsApp dijalankan. Tunggu beberapa detik sampai QR muncul.'];
-    }
-
     public function disconnectBridge(): array
     {
-        $fallback = false;
-
         try {
-            Http::connectTimeout(1)
+            Http::connectTimeout(2)
                 ->timeout(5)
                 ->withToken((string) config('whatsapp.bridge_token'))
                 ->post(config('whatsapp.bridge_url').'/disconnect')
                 ->throw();
         } catch (\Throwable $exception) {
-            $fallback = true;
-            $processStopped = $this->stopPersistedBridgeProcess();
-
-            Log::warning('whatsapp.disconnect_fallback', [
+            Log::warning('whatsapp.disconnect_failed', [
                 'exception' => $exception::class,
                 'error' => $exception->getMessage(),
-                'process_stopped' => $processStopped,
             ]);
+
+            return [
+                'disconnected' => false,
+                'message' => 'WhatsApp gagal diputuskan. Bridge tidak merespons, coba lagi beberapa saat.',
+            ];
         }
 
-        $this->clearLocalBridgeSession();
-
-        file_put_contents((string) config('whatsapp.status_file'), json_encode([
-            'ready' => false,
-            'state' => 'disconnected',
-            'fallback' => $fallback,
-            'error' => null,
-            'updated_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT));
-
-        return [
-            'disconnected' => true,
-            'fallback' => $fallback,
-            'message' => $fallback
-                ? 'WhatsApp diputuskan melalui fallback karena bridge tidak merespons.'
-                : 'WhatsApp berhasil diputuskan.',
-        ];
-    }
-
-    public function isBridgeRunning(): bool
-    {
-        try {
-            return Http::timeout(1)
-                ->withToken((string) config('whatsapp.bridge_token'))
-                ->get(config('whatsapp.bridge_url').'/status')
-                ->successful();
-        } catch (\Throwable) {
-            // Fall back to the PID check for a bridge that is still booting.
-        }
-
-        $pidFile = (string) config('whatsapp.bridge_pid_file');
-        if (! is_file($pidFile)) {
-            return false;
-        }
-        $pid = trim((string) file_get_contents($pidFile));
-        if ($pid === '' || ! ctype_digit($pid)) {
-            return false;
-        }
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            return $this->windowsLauncher->isRunning($pid);
-        }
-
-        return function_exists('posix_kill') ? @posix_kill((int) $pid, 0) : is_dir('/proc/'.$pid);
+        return ['disconnected' => true, 'message' => 'WhatsApp berhasil diputuskan.'];
     }
 
     public function status(): array
     {
-        $path = (string) config('whatsapp.status_file');
-        if (! is_file($path)) {
-            return ['ready' => false, 'state' => 'not_started', 'running' => $this->isBridgeRunning()];
+        try {
+            $response = Http::timeout(3)
+                ->withToken((string) config('whatsapp.bridge_token'))
+                ->get(config('whatsapp.bridge_url').'/status');
+        } catch (\Throwable) {
+            return ['ready' => false, 'state' => 'unreachable', 'running' => false];
         }
 
-        $status = json_decode((string) file_get_contents($path), true) ?: ['ready' => false, 'state' => 'unknown'];
-        $status['running'] = $this->isBridgeRunning();
-        $status['stale'] = (bool) ($status['ready'] ?? false) && ! $status['running'];
+        if (! $response->successful()) {
+            return ['ready' => false, 'state' => 'unreachable', 'running' => false];
+        }
+
+        $status = $response->json() ?: ['ready' => false, 'state' => 'unknown'];
+        $status['running'] = true;
 
         return $status;
     }
 
     public function qr(): ?string
     {
-        $path = (string) config('whatsapp.qr_file');
-
-        return is_file($path) ? file_get_contents($path) : null;
+        return $this->fetchQr()['qr'] ?? null;
     }
 
     public function qrImage(): ?string
     {
-        $path = (string) config('whatsapp.qr_image_file');
-        if (! is_file($path)) {
-            return null;
-        }
-
-        return 'data:image/png;base64,'.base64_encode((string) file_get_contents($path));
+        return $this->fetchQr()['qrImage'] ?? null;
     }
 
-    private function startBridgeOnWindows(string $storage): string
+    private function fetchQr(): array
     {
-        return $this->windowsLauncher->start([
-            'node',
-            base_path('wa-bridge/server.js'),
-        ], base_path(), [
-            'WHATSAPP_BRIDGE_TOKEN' => (string) config('whatsapp.bridge_token'),
-            'WA_BRIDGE_STORAGE' => $storage,
-            'WA_BRIDGE_PORT' => '3100',
-        ], (string) config('whatsapp.bridge_log_file'), (string) config('whatsapp.bridge_error_log_file'));
-    }
+        try {
+            $response = Http::timeout(3)
+                ->withToken((string) config('whatsapp.bridge_token'))
+                ->get(config('whatsapp.bridge_url').'/qr');
 
-    private function startBridgeOnUnix(string $storage): string
-    {
-        $command = sprintf(
-            'cd %s && WHATSAPP_BRIDGE_TOKEN=%s WA_BRIDGE_STORAGE=%s WA_BRIDGE_PORT=3100 nohup npm run wa:bridge >> %s 2>&1 & echo $!',
-            escapeshellarg(base_path()),
-            escapeshellarg((string) config('whatsapp.bridge_token')),
-            escapeshellarg($storage),
-            escapeshellarg((string) config('whatsapp.bridge_log_file')),
-        );
-
-        return trim((string) shell_exec($command));
-    }
-
-    private function stopPersistedBridgeProcess(): bool
-    {
-        $pidFile = (string) config('whatsapp.bridge_pid_file');
-        if (! is_file($pidFile)) {
-            return false;
-        }
-
-        $pid = trim((string) file_get_contents($pidFile));
-        if ($pid === '' || ! ctype_digit($pid) || (int) $pid <= 0) {
-            return false;
-        }
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            return $this->windowsLauncher->stop($pid);
-        }
-
-        $commandLineFile = '/proc/'.$pid.'/cmdline';
-        if (! function_exists('posix_kill') || ! is_file($commandLineFile)) {
-            return false;
-        }
-
-        $commandLine = str_replace("\0", ' ', (string) file_get_contents($commandLineFile));
-        if (! str_contains($commandLine, 'wa-bridge/server.js')) {
-            return false;
-        }
-
-        return @posix_kill((int) $pid, SIGTERM);
-    }
-
-    private function clearLocalBridgeSession(): void
-    {
-        File::delete([
-            (string) config('whatsapp.bridge_pid_file'),
-            (string) config('whatsapp.qr_file'),
-            (string) config('whatsapp.qr_image_file'),
-        ]);
-
-        $sessionDirectory = dirname((string) config('whatsapp.status_file')).DIRECTORY_SEPARATOR.'session-baileys';
-        if (File::isDirectory($sessionDirectory)) {
-            File::deleteDirectory($sessionDirectory);
-        }
-
-        if (File::isDirectory($sessionDirectory)) {
-            throw new \RuntimeException('Folder sesi WhatsApp tidak dapat dibersihkan.');
+            return $response->successful() ? (array) $response->json() : [];
+        } catch (\Throwable) {
+            return [];
         }
     }
+
 }
