@@ -46,15 +46,14 @@ class DocumentTemplateController extends Controller
 
         $file = $data['template'];
         $scanner->assertClean($file);
-        $path = $file->store('document-templates', 'private');
 
         try {
-            $pageCount = (new Fpdi)->setSourceFile(Storage::disk('private')->path($path));
+            $pageCount = (new Fpdi)->setSourceFile($file->getRealPath());
         } catch (\Throwable) {
-            Storage::disk('private')->delete($path);
             throw ValidationException::withMessages(['template' => 'File tidak dapat dibaca sebagai PDF yang valid.']);
         }
 
+        $path = $file->store('document-templates', 'private');
         $version = DocumentTemplate::where('service_type_id', $data['service_type_id'])->max('version') + 1;
 
         $template = DocumentTemplate::create([

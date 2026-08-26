@@ -15,16 +15,16 @@ class BackupService
             throw new RuntimeException('PHP zip extension wajib tersedia untuk membuat backup.');
         }
 
-        $backupDir = storage_path('app/private/backups');
-        if (! is_dir($backupDir)) {
-            mkdir($backupDir, 0750, true);
-        }
-
         $filename = 'backup-'.now()->format('Ymd-His').'.zip';
-        $absolutePath = $backupDir.DIRECTORY_SEPARATOR.$filename;
+        $storagePath = 'backups/'.$filename;
+        $absolutePath = tempnam(sys_get_temp_dir(), 'vsm-backup-');
+        if ($absolutePath === false) {
+            throw new RuntimeException('Tidak bisa membuat file backup sementara.');
+        }
 
         $zip = new ZipArchive;
         if ($zip->open($absolutePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            @unlink($absolutePath);
             throw new RuntimeException('Tidak bisa membuat archive backup.');
         }
 
@@ -49,14 +49,54 @@ class BackupService
             }
         }
 
+        $privateDisk = Storage::disk('private');
+        $storedFiles = 0;
+        foreach ($privateDisk->allFiles() as $path) {
+            if (explode('/', $path, 2)[0] === 'backups') {
+                continue;
+            }
+
+            $stream = $privateDisk->readStream($path);
+            if (! is_resource($stream)) {
+                $zip->close();
+                @unlink($absolutePath);
+                throw new RuntimeException("File private storage tidak dapat dibaca: {$path}");
+            }
+
+            try {
+                $contents = stream_get_contents($stream);
+            } finally {
+                fclose($stream);
+            }
+
+            if ($contents === false || ! $zip->addFromString('storage/private/'.$path, $contents)) {
+                $zip->close();
+                @unlink($absolutePath);
+                throw new RuntimeException("File gagal ditambahkan ke backup: {$path}");
+            }
+            $storedFiles++;
+        }
+
+        $manifest['private_storage_files'] = $storedFiles;
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-
-        $privateRoot = Storage::disk('private')->path('');
-        $this->addDirectory($zip, $privateRoot, 'storage/private', ['backups']);
-
         $zip->close();
 
-        return 'backups/'.$filename;
+        $archive = fopen($absolutePath, 'rb');
+        if (! is_resource($archive)) {
+            @unlink($absolutePath);
+            throw new RuntimeException('Archive backup tidak dapat dibaca.');
+        }
+
+        try {
+            if (! $privateDisk->put($storagePath, $archive)) {
+                throw new RuntimeException('Archive backup tidak dapat disimpan ke private storage.');
+            }
+        } finally {
+            fclose($archive);
+            @unlink($absolutePath);
+        }
+
+        return $storagePath;
     }
 
     private function mysqlDump(): ?string
@@ -89,32 +129,5 @@ class BackupService
         }
 
         return $result->output();
-    }
-
-    /** @param list<string> $excludedTopLevel */
-    private function addDirectory(ZipArchive $zip, string $root, string $prefix, array $excludedTopLevel = []): void
-    {
-        if (! is_dir($root)) {
-            return;
-        }
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::LEAVES_ONLY
-        );
-
-        foreach ($iterator as $file) {
-            if (! $file->isFile()) {
-                continue;
-            }
-
-            $relative = str_replace('\\', '/', substr($file->getPathname(), strlen(rtrim($root, DIRECTORY_SEPARATOR)) + 1));
-            $topLevel = explode('/', $relative, 2)[0];
-            if (in_array($topLevel, $excludedTopLevel, true)) {
-                continue;
-            }
-
-            $zip->addFile($file->getPathname(), $prefix.'/'.$relative);
-        }
     }
 }

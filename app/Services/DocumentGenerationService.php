@@ -14,7 +14,10 @@ use setasign\Fpdi\Fpdi;
 
 class DocumentGenerationService
 {
-    public function __construct(private DocumentMappingResolver $mappingResolver) {}
+    public function __construct(
+        private DocumentMappingResolver $mappingResolver,
+        private PrivateFileStorage $privateStorage,
+    ) {}
 
     public function generate(ServiceRequest $serviceRequest, DocumentTemplate $template, ?string $reason = null): GeneratedDocument
     {
@@ -24,44 +27,16 @@ class DocumentGenerationService
 
         $serviceRequest->loadMissing('serviceType', 'fieldValues');
         $template->loadMissing('fields');
-        $templatePath = Storage::disk('private')->path($template->template_file_path);
-        if (! is_file($templatePath)) {
+        if (! $this->privateStorage->disk()->exists($template->template_file_path)) {
             throw new RuntimeException('Template PDF tidak ditemukan di private storage.');
         }
 
-        $pdf = new Fpdi;
-        $pageCount = $pdf->setSourceFile($templatePath);
-        if ($pageCount < 1) {
-            throw new RuntimeException('Template PDF tidak mempunyai halaman.');
-        }
+        [$pageCount, $content] = $this->privateStorage->withLocalFile(
+            $template->template_file_path,
+            fn (string $templatePath): array => $this->render($templatePath, $serviceRequest, $template),
+        );
 
         $template->forceFill(['page_count' => $pageCount])->saveQuietly();
-        $fieldsByPage = $template->fields->groupBy(fn ($field) => (int) $field->page_number);
-        $variables = $this->variables($serviceRequest);
-
-        foreach ($template->fields as $field) {
-            if ((int) $field->page_number > $pageCount) {
-                throw new RuntimeException("Field '{$field->label}' berada di halaman yang tidak tersedia.");
-            }
-        }
-
-        for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
-            $templateId = $pdf->importPage($pageNumber);
-            $size = $pdf->getTemplateSize($templateId);
-            $orientation = ($size['width'] ?? 0) > ($size['height'] ?? 0) ? 'L' : 'P';
-            $pdf->AddPage($orientation, [$size['width'], $size['height']]);
-            $pdf->useTemplate($templateId, 0, 0, $size['width'], $size['height'], true);
-
-            foreach ($fieldsByPage->get($pageNumber, collect()) as $field) {
-                $value = $this->mappingResolver->resolve($field->mapping_config, $field->variable_key, $variables);
-                $this->writeField($pdf, $field, $value, $size['width'], $size['height']);
-            }
-        }
-
-        $content = $pdf->Output('S');
-        if (! str_starts_with($content, '%PDF-') || strlen($content) < 100) {
-            throw new RuntimeException('Hasil generate bukan PDF yang valid.');
-        }
 
         $path = 'generated-documents/'.$serviceRequest->request_code.'/'.Str::uuid().'.pdf';
         if (! Storage::disk('private')->put($path, $content)) {
@@ -102,6 +77,45 @@ class DocumentGenerationService
             Storage::disk('private')->delete($path);
             throw $exception;
         }
+    }
+
+    /** @return array{int, string} */
+    private function render(string $templatePath, ServiceRequest $serviceRequest, DocumentTemplate $template): array
+    {
+        $pdf = new Fpdi;
+        $pageCount = $pdf->setSourceFile($templatePath);
+        if ($pageCount < 1) {
+            throw new RuntimeException('Template PDF tidak mempunyai halaman.');
+        }
+
+        $fieldsByPage = $template->fields->groupBy(fn ($field) => (int) $field->page_number);
+        $variables = $this->variables($serviceRequest);
+
+        foreach ($template->fields as $field) {
+            if ((int) $field->page_number > $pageCount) {
+                throw new RuntimeException("Field '{$field->label}' berada di halaman yang tidak tersedia.");
+            }
+        }
+
+        for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+            $templateId = $pdf->importPage($pageNumber);
+            $size = $pdf->getTemplateSize($templateId);
+            $orientation = ($size['width'] ?? 0) > ($size['height'] ?? 0) ? 'L' : 'P';
+            $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+            $pdf->useTemplate($templateId, 0, 0, $size['width'], $size['height'], true);
+
+            foreach ($fieldsByPage->get($pageNumber, collect()) as $field) {
+                $value = $this->mappingResolver->resolve($field->mapping_config, $field->variable_key, $variables);
+                $this->writeField($pdf, $field, $value, $size['width'], $size['height']);
+            }
+        }
+
+        $content = $pdf->Output('S');
+        if (! str_starts_with($content, '%PDF-') || strlen($content) < 100) {
+            throw new RuntimeException('Hasil generate bukan PDF yang valid.');
+        }
+
+        return [$pageCount, $content];
     }
 
     public function variables(ServiceRequest $serviceRequest): array

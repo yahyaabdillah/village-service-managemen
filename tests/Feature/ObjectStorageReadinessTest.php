@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Services\BackupService;
 use App\Services\PrivateFileStorage;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
+use ZipArchive;
 
 class ObjectStorageReadinessTest extends TestCase
 {
@@ -73,5 +76,57 @@ class ObjectStorageReadinessTest extends TestCase
         ])->assertSuccessful();
 
         Storage::disk('object')->assertMissing('generated-documents/final.pdf');
+    }
+
+    public function test_backup_streams_private_objects_without_requiring_a_local_disk_path(): void
+    {
+        $sourceStream = fopen('php://temp', 'w+b');
+        fwrite($sourceStream, 'remote document');
+        rewind($sourceStream);
+
+        $archiveContents = null;
+        $disk = \Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('allFiles')->once()->andReturn(['service-requests/REQ-1/document.txt']);
+        $disk->shouldReceive('readStream')
+            ->once()
+            ->with('service-requests/REQ-1/document.txt')
+            ->andReturn($sourceStream);
+        $disk->shouldReceive('put')
+            ->once()
+            ->withArgs(function (string $path, $stream) use (&$archiveContents): bool {
+                $archiveContents = stream_get_contents($stream);
+
+                return str_starts_with($path, 'backups/backup-') && is_string($archiveContents);
+            })
+            ->andReturnTrue();
+
+        Storage::shouldReceive('disk')->with('private')->andReturn($disk);
+
+        $path = app(BackupService::class)->create();
+
+        $this->assertStringStartsWith('backups/backup-', $path);
+        $this->assertNotNull($archiveContents);
+
+        $temporaryArchive = tempnam(sys_get_temp_dir(), 'backup-test-');
+        file_put_contents($temporaryArchive, $archiveContents);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($temporaryArchive));
+        $this->assertSame(
+            'remote document',
+            $zip->getFromName('storage/private/service-requests/REQ-1/document.txt'),
+        );
+        $zip->close();
+        @unlink($temporaryArchive);
+    }
+
+    public function test_health_check_verifies_private_storage_without_leaving_test_objects(): void
+    {
+        Storage::fake('private');
+
+        $this->get(route('health'))
+            ->assertOk()
+            ->assertJsonPath('checks.private_storage.ok', true);
+
+        $this->assertSame([], Storage::disk('private')->allFiles('healthcheck'));
     }
 }

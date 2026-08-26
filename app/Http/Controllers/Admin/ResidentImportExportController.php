@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Resident;
+use App\Services\PrivateFileStorage;
 use App\Services\ResidentExcelService;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -79,7 +80,7 @@ class ResidentImportExportController extends Controller
         return back()->with('import_preview', $preview);
     }
 
-    public function import(Request $request, ResidentExcelService $excel)
+    public function import(Request $request, ResidentExcelService $excel, PrivateFileStorage $privateStorage)
     {
         $data = $request->validate([
             'import_token' => ['required', 'string', 'size:40'],
@@ -94,14 +95,20 @@ class ResidentImportExportController extends Controller
             ]);
         }
 
-        $file = new UploadedFile(
-            Storage::disk('private')->path($pending['path']),
-            $pending['file_name'],
-            null,
-            null,
-            true,
+        $count = $privateStorage->withLocalFile(
+            $pending['path'],
+            function (string $localPath) use ($excel, $pending): int {
+                $file = new UploadedFile(
+                    $localPath,
+                    $pending['file_name'],
+                    null,
+                    null,
+                    true,
+                );
+
+                return $excel->import($file);
+            },
         );
-        $count = $excel->import($file);
 
         Storage::disk('private')->delete($pending['path']);
         $request->session()->forget('resident_import');
