@@ -28,7 +28,23 @@ Scan QR dari WhatsApp mobile. Status, QR, dan sesi login tersimpan di VPS (bukan
 
 ## Trigger notifikasi
 
-Saat status pengajuan berubah melalui `ServiceRequest::transitionTo()`, sistem mengirim pesan ke nomor `service_requests.phone` bila `WHATSAPP_NOTIFICATIONS_ENABLED=true`.
+Notifikasi WhatsApp otomatis terkirim pada dua momen (bila `WHATSAPP_NOTIFICATIONS_ENABLED=true`):
+
+1. **Saat warga submit pengajuan** (`PublicController::submitRequest()`) — pesan konfirmasi berisi kode pengajuan, NIK, jenis layanan, dan link cek status.
+2. **Saat status pengajuan berubah** melalui `ServiceRequest::transitionTo()` (diverifikasi/diproses/selesai/ditolak/dibatalkan) — pesan menyesuaikan status terbaru, plus catatan admin (kalau ada).
+
+Semua pesan dikirim ke `service_requests.phone`, dengan bahasa formal + emoji, dan selalu menyertakan cara cek status (kode pengajuan + NIK di halaman `/cek-status`).
+
+## Rate limiting
+
+Untuk melindungi akun WhatsApp bridge dari flagging/ban akibat mengirim pesan terlalu cepat, setiap pengiriman (pesan status maupun dokumen) dibatasi dari sisi Laravel sebelum memanggil bridge:
+
+```env
+WHATSAPP_RATE_LIMIT_PER_MINUTE=20      # batas global, semua penerima
+WHATSAPP_RATE_LIMIT_PER_RECIPIENT=5    # batas per nomor tujuan, per 10 menit
+```
+
+Kalau limit tercapai, pesan ditandai `failed` di `notification_logs` (untuk notifikasi status) atau melempar error yang ditampilkan ke admin (untuk kirim dokumen manual) — tidak pernah memanggil bridge sama sekali.
 
 ## Catatan production
 
