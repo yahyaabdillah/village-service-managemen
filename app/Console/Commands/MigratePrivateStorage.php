@@ -29,8 +29,8 @@ class MigratePrivateStorage extends Command
 
         try {
             $source = Storage::disk($sourceName);
-            $target = Storage::disk($targetName);
             $files = $source->allFiles();
+            $target = $this->option('dry-run') ? null : Storage::disk($targetName);
         } catch (Throwable $exception) {
             $this->error('Storage tidak dapat diakses: '.$exception->getMessage());
 
@@ -41,13 +41,6 @@ class MigratePrivateStorage extends Command
         $skipped = 0;
 
         foreach ($files as $path) {
-            if (! $this->option('force') && $target->exists($path)) {
-                $skipped++;
-                $this->line("SKIP {$path}");
-
-                continue;
-            }
-
             if ($this->option('dry-run')) {
                 $this->line("COPY {$path}");
                 $copied++;
@@ -55,21 +48,46 @@ class MigratePrivateStorage extends Command
                 continue;
             }
 
-            $stream = $source->readStream($path);
-            if (! is_resource($stream)) {
-                $this->error("Gagal membaca {$path}");
-
-                return self::FAILURE;
-            }
-
             try {
-                if (! $target->put($path, $stream)) {
-                    $this->error("Gagal menulis {$path}");
+                if ($target === null) {
+                    $this->error('Disk tujuan tidak tersedia.');
 
                     return self::FAILURE;
                 }
-            } finally {
-                fclose($stream);
+
+                if (! $this->option('force') && $target->exists($path)) {
+                    $skipped++;
+                    $this->line("SKIP {$path}");
+
+                    continue;
+                }
+
+                $stream = $source->readStream($path);
+                if (! is_resource($stream)) {
+                    $this->error("Gagal membaca {$path}");
+
+                    return self::FAILURE;
+                }
+
+                try {
+                    if (! $target->put($path, $stream)) {
+                        $this->error("Gagal menulis {$path}");
+
+                        return self::FAILURE;
+                    }
+                } finally {
+                    fclose($stream);
+                }
+
+                if ($source->size($path) !== $target->size($path)) {
+                    $this->error("Verifikasi ukuran gagal untuk {$path}");
+
+                    return self::FAILURE;
+                }
+            } catch (Throwable $exception) {
+                $this->error("Migrasi gagal pada {$path}: {$exception->getMessage()}");
+
+                return self::FAILURE;
             }
 
             $copied++;
