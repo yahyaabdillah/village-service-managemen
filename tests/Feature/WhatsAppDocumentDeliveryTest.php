@@ -2,12 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\NotificationLog;
 use App\Models\ServiceRequest;
+use App\Models\ServiceType;
 use App\Models\User;
+use App\Services\WhatsAppNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -27,6 +32,74 @@ class WhatsAppDocumentDeliveryTest extends TestCase
             'whatsapp.document_max_size_kb' => 5120,
             'queue.default' => 'database',
         ]);
+
+        RateLimiter::clear('whatsapp-send:global');
+    }
+
+    public function test_submission_sends_whatsapp_confirmation_with_code_and_nik(): void
+    {
+        Storage::fake('private');
+        Http::fake(['127.0.0.1:3100/send-message' => Http::response(['ok' => true])]);
+        $this->seed();
+
+        $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
+        $requirement = $service->requirements()->firstOrFail();
+
+        $this->post('/pengajuan', [
+            'service_type_id' => $service->id,
+            'nik' => '3201010101010099',
+            'applicant_name' => 'Warga Uji Coba',
+            'phone' => '081234500099',
+            'address' => 'Jl. Uji Coba No. 9',
+            'fields' => ['keperluan' => 'Keperluan pengujian'],
+            'requirements' => [
+                $requirement->id => UploadedFile::fake()->create('ktp.jpg', 100, 'image/jpeg'),
+            ],
+        ])->assertRedirect();
+
+        $serviceRequest = ServiceRequest::where('nik', '3201010101010099')->firstOrFail();
+
+        Http::assertSent(fn ($request) => $request->url() === 'http://127.0.0.1:3100/send-message'
+            && $request['phone'] === $serviceRequest->phone
+            && str_contains($request['message'], $serviceRequest->request_code)
+            && str_contains($request['message'], '3201010101010099')
+            && str_contains($request['message'], 'Desa Ngringo'));
+        $this->assertDatabaseHas('notification_logs', [
+            'service_request_id' => $serviceRequest->id,
+            'channel' => 'whatsapp',
+            'status' => 'sent',
+        ]);
+    }
+
+    public function test_rate_limiter_blocks_excessive_sends_to_same_recipient(): void
+    {
+        config(['whatsapp.rate_limit_per_recipient' => 1]);
+        Http::fake(['127.0.0.1:3100/send-message' => Http::response(['ok' => true])]);
+        $this->seed();
+        $serviceRequest = ServiceRequest::factory()->create(['phone' => '+6281200000111']);
+        $service = app(WhatsAppNotificationService::class);
+
+        $first = NotificationLog::create([
+            'service_request_id' => $serviceRequest->id,
+            'channel' => 'whatsapp',
+            'recipient' => $serviceRequest->phone,
+            'message' => 'Pesan pertama.',
+            'status' => 'pending',
+        ]);
+        $second = NotificationLog::create([
+            'service_request_id' => $serviceRequest->id,
+            'channel' => 'whatsapp',
+            'recipient' => $serviceRequest->phone,
+            'message' => 'Pesan kedua.',
+            'status' => 'pending',
+        ]);
+
+        $service->sendNow($first);
+        $service->sendNow($second);
+
+        $this->assertSame('sent', $first->fresh()->status);
+        $this->assertSame('failed', $second->fresh()->status);
+        $this->assertStringContainsString('Batas pengiriman', (string) $second->fresh()->error_message);
     }
 
     public function test_status_notification_uses_dedicated_sync_queue_connection(): void

@@ -6,9 +6,11 @@ use App\Jobs\SendWhatsAppNotification;
 use App\Models\GeneratedDocument;
 use App\Models\NotificationLog;
 use App\Models\ServiceRequest;
+use App\Models\VillageProfile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -17,20 +19,55 @@ class WhatsAppNotificationService
 {
     public function __construct(private readonly WindowsDetachedProcessLauncher $windowsLauncher) {}
 
+    public function notifySubmitted(ServiceRequest $serviceRequest): void
+    {
+        if (! config('whatsapp.enabled') || blank($serviceRequest->phone)) {
+            return;
+        }
+
+        $message = "Terima kasih 🙏 telah mengajukan layanan melalui *{$this->villageName()}*.\n\n"
+            ."Berikut detail pengajuan Anda:\n"
+            ."📄 Kode Pengajuan: *{$serviceRequest->request_code}*\n"
+            ."🆔 NIK: *{$serviceRequest->nik}*\n"
+            ."📋 Jenis Layanan: *{$serviceRequest->serviceType?->name}*\n\n"
+            ."Anda dapat memantau status pengajuan kapan saja melalui halaman *Cek Status* di website kami, dengan memasukkan Kode Pengajuan dan NIK di atas:\n"
+            ."🔗 {$this->statusCheckUrl()}\n\n"
+            ."Kami akan mengirimkan kabar melalui WhatsApp ini setiap kali status pengajuan Anda berubah. Mohon ditunggu ya 😊";
+
+        $this->queueMessage($serviceRequest, 'whatsapp', $message);
+    }
+
     public function notifyStatusChanged(ServiceRequest $serviceRequest, string $status, ?string $note = null): void
     {
         if (! config('whatsapp.enabled') || blank($serviceRequest->phone)) {
             return;
         }
 
-        $message = "Pengajuan {$serviceRequest->request_code}: ".$serviceRequest->publicStatusLabel();
-        if ($note) {
-            $message .= "\nCatatan: {$note}";
-        }
+        $body = match ($status) {
+            'verified' => "Pengajuan layanan Anda dengan kode *{$serviceRequest->request_code}* sedang *diverifikasi* oleh petugas {$this->villageName()}. ✅",
+            'processing' => "Pengajuan layanan Anda dengan kode *{$serviceRequest->request_code}* sedang *diproses* oleh petugas {$this->villageName()}. ⚙️",
+            'completed' => "Pengajuan layanan Anda dengan kode *{$serviceRequest->request_code}* telah *selesai diproses*. 🎉 Dokumen hasil layanan akan segera kami kirimkan menyusul.",
+            'rejected' => "Mohon maaf 🙏, pengajuan layanan Anda dengan kode *{$serviceRequest->request_code}* belum dapat kami proses lebih lanjut (*ditolak*).",
+            'cancelled' => "Pengajuan layanan Anda dengan kode *{$serviceRequest->request_code}* telah *dibatalkan*.",
+            default => "Status pengajuan layanan Anda dengan kode *{$serviceRequest->request_code}* telah diperbarui menjadi *{$serviceRequest->publicStatusLabel()}*.",
+        };
 
+        $message = "🔔 *Pemberitahuan Otomatis*\n\n".$body;
+        if ($note) {
+            $message .= "\n📝 Catatan: {$note}";
+        }
+        $message .= "\n\n🆔 NIK: *{$serviceRequest->nik}*\n"
+            ."🔗 Cek detail pengajuan: {$this->statusCheckUrl()}\n\n"
+            .'Terima kasih atas kesabarannya 🙏';
+
+        $this->queueMessage($serviceRequest, 'whatsapp', $message);
+    }
+
+    private function queueMessage(ServiceRequest $serviceRequest, string $channel, string $message): void
+    {
         $log = NotificationLog::create([
             'service_request_id' => $serviceRequest->id,
-            'channel' => 'whatsapp',
+            'channel' => $channel,
             'recipient' => $serviceRequest->phone,
             'message' => $message,
             'status' => 'pending',
@@ -40,9 +77,36 @@ class WhatsAppNotificationService
             ->onConnection((string) config('whatsapp.queue_connection', 'sync'));
     }
 
+    private function villageName(): string
+    {
+        return VillageProfile::where('is_active', true)->value('village_name') ?? config('app.name', 'Layanan Desa');
+    }
+
+    private function statusCheckUrl(): string
+    {
+        return route('status.form');
+    }
+
+    private function assertWithinRateLimit(string $recipient): void
+    {
+        $globalKey = 'whatsapp-send:global';
+        $recipientKey = 'whatsapp-send:'.$recipient;
+        $globalLimit = max(1, (int) config('whatsapp.rate_limit_per_minute', 20));
+        $recipientLimit = max(1, (int) config('whatsapp.rate_limit_per_recipient', 5));
+
+        if (RateLimiter::tooManyAttempts($globalKey, $globalLimit) || RateLimiter::tooManyAttempts($recipientKey, $recipientLimit)) {
+            throw new RuntimeException('Batas pengiriman WhatsApp tercapai, coba lagi beberapa saat.');
+        }
+
+        RateLimiter::hit($globalKey, 60);
+        RateLimiter::hit($recipientKey, 600);
+    }
+
     public function sendNow(NotificationLog $log): void
     {
         try {
+            $this->assertWithinRateLimit($log->recipient);
+
             Http::timeout(5)
                 ->withToken((string) config('whatsapp.bridge_token'))
                 ->post(config('whatsapp.bridge_url').'/send-message', [
@@ -101,7 +165,8 @@ class WhatsAppNotificationService
         $extension = preg_match('/^[a-z0-9]{1,10}$/', $extension) ? $extension : 'bin';
         $filename = $serviceRequest->request_code.'.'.$extension;
         $mimeType = $document->mime_type ?: $disk->mimeType($document->file_path) ?: 'application/octet-stream';
-        $caption = "Dokumen final pengajuan {$serviceRequest->request_code}.";
+        $caption = "📎 Berikut dokumen hasil layanan Anda untuk pengajuan *{$serviceRequest->request_code}* ({$serviceRequest->serviceType?->name}).\n\n"
+            ."Jika ada pertanyaan lebih lanjut, silakan hubungi kantor {$this->villageName()}. Terima kasih telah menggunakan layanan kami 🙏";
 
         $log = NotificationLog::create([
             'service_request_id' => $serviceRequest->id,
@@ -112,6 +177,8 @@ class WhatsAppNotificationService
         ]);
 
         try {
+            $this->assertWithinRateLimit($serviceRequest->phone);
+
             Http::connectTimeout(2)
                 ->timeout(15)
                 ->withToken((string) config('whatsapp.bridge_token'))

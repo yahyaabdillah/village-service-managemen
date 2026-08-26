@@ -15,6 +15,7 @@ use FPDF;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -426,6 +427,7 @@ class SecurityHardeningTest extends TestCase
 
     public function test_whatsapp_linking_page_and_status_notification_hook(): void
     {
+        RateLimiter::clear('whatsapp-send:global');
         $statusFile = storage_path('framework/testing/security-whatsapp-status.json');
         file_put_contents($statusFile, json_encode(['ready' => false, 'state' => 'not_started'], JSON_THROW_ON_ERROR));
         Http::fake([

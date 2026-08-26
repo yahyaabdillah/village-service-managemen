@@ -7,6 +7,7 @@ use App\Models\ServiceRequest;
 use App\Models\ServiceType;
 use App\Models\VillageProfile;
 use App\Services\MalwareScanner;
+use App\Services\WhatsAppNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -150,6 +151,10 @@ class PublicController extends Controller
                 'note' => 'Pengajuan diterima oleh sistem.',
                 'is_public' => true,
             ]);
+
+            $requestId = $sr->id;
+            DB::afterCommit(fn () => app(WhatsAppNotificationService::class)
+                ->notifySubmitted(ServiceRequest::with('serviceType')->find($requestId)));
 
             return $sr;
         });
