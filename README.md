@@ -44,6 +44,7 @@ WHATSAPP_BRIDGE_TOKEN=<harus sama dengan WHATSAPP_BRIDGE_TOKEN di sini>
 | Method | Path | Fungsi |
 |---|---|---|
 | GET | `/status` | Status koneksi WhatsApp |
+| GET | `/qr` | QR code untuk login (`qr` teks & `qrImage` base64 PNG, `null` kalau sudah connected) |
 | POST | `/send-message` | Kirim pesan teks (`phone`, `message`) |
 | POST | `/send-document` | Kirim dokumen base64 (`phone`, `filename`, `mime_type`, `document`, `caption`) |
 | POST | `/disconnect` | Logout & putus sesi WhatsApp |

@@ -171,6 +171,15 @@ app.get('/status', (_req, res) => {
   res.json({ ...status, running: true });
 });
 
+app.get('/qr', (_req, res) => {
+  const qr = fs.existsSync(qrFile) ? fs.readFileSync(qrFile, 'utf8') : null;
+  const qrImage = fs.existsSync(qrImageFile)
+    ? `data:image/png;base64,${fs.readFileSync(qrImageFile).toString('base64')}`
+    : null;
+
+  res.json({ qr, qrImage });
+});
+
 app.post('/disconnect', async (_req, res) => {
   shuttingDown = true;
   ready = false;
