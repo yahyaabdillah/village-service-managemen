@@ -6,6 +6,7 @@ use App\Services\BackupService;
 use App\Services\PrivateFileStorage;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -128,5 +129,23 @@ class ObjectStorageReadinessTest extends TestCase
             ->assertJsonPath('checks.private_storage.ok', true);
 
         $this->assertSame([], Storage::disk('private')->allFiles('healthcheck'));
+    }
+
+    public function test_backup_removes_temporary_archive_when_object_storage_fails(): void
+    {
+        $before = glob(sys_get_temp_dir().DIRECTORY_SEPARATOR.'vsm-backup-*') ?: [];
+        $disk = \Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('allFiles')->once()->andThrow(new RuntimeException('provider unavailable'));
+        Storage::shouldReceive('disk')->with('private')->andReturn($disk);
+
+        try {
+            app(BackupService::class)->create();
+            $this->fail('Backup seharusnya gagal ketika provider tidak tersedia.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('provider unavailable', $exception->getMessage());
+        }
+
+        $after = glob(sys_get_temp_dir().DIRECTORY_SEPARATOR.'vsm-backup-*') ?: [];
+        $this->assertSame([], array_values(array_diff($after, $before)));
     }
 }
