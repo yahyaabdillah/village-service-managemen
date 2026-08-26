@@ -1,5 +1,34 @@
 <?php
 
+$privateLocalDisk = [
+    'driver' => 'local',
+    'root' => storage_path('app/private'),
+    'serve' => false,
+    'throw' => true,
+    'report' => true,
+];
+
+$objectStorageDisk = [
+    'driver' => 's3',
+    'key' => env('OBJECT_STORAGE_ACCESS_KEY_ID'),
+    'secret' => env('OBJECT_STORAGE_SECRET_ACCESS_KEY'),
+    'region' => env('OBJECT_STORAGE_REGION', 'us-east-1'),
+    'bucket' => env('OBJECT_STORAGE_BUCKET'),
+    'endpoint' => env('OBJECT_STORAGE_ENDPOINT'),
+    'url' => env('OBJECT_STORAGE_URL'),
+    'root' => env('OBJECT_STORAGE_PREFIX', ''),
+    'use_path_style_endpoint' => env('OBJECT_STORAGE_USE_PATH_STYLE_ENDPOINT', true),
+    // Supabase S3 does not support optional ACL or checksum headers.
+    'request_checksum_calculation' => 'when_required',
+    'response_checksum_validation' => 'when_required',
+    'throw' => true,
+    'report' => true,
+];
+
+$privateDisk = env('PRIVATE_STORAGE_DRIVER', 'local') === 's3'
+    ? $objectStorageDisk
+    : $privateLocalDisk;
+
 return [
 
     /*
@@ -38,13 +67,11 @@ return [
             'report' => false,
         ],
 
-        'private' => [
-            'driver' => 'local',
-            'root' => storage_path('app/private'),
-            'serve' => false,
-            'throw' => true,
-            'report' => true,
-        ],
+        'private' => $privateDisk,
+
+        'private-local' => $privateLocalDisk,
+
+        'object' => $objectStorageDisk,
 
         'public' => [
             'driver' => 'local',

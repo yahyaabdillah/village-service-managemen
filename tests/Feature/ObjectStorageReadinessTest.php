@@ -8,6 +8,16 @@ use Tests\TestCase;
 
 class ObjectStorageReadinessTest extends TestCase
 {
+    public function test_object_disk_is_private_and_s3_compatible(): void
+    {
+        $this->assertSame('s3', config('filesystems.disks.object.driver'));
+        $this->assertTrue(config('filesystems.disks.object.throw'));
+        $this->assertArrayNotHasKey('visibility', config('filesystems.disks.object'));
+        $this->assertArrayHasKey('endpoint', config('filesystems.disks.object'));
+        $this->assertArrayHasKey('use_path_style_endpoint', config('filesystems.disks.object'));
+        $this->assertSame('when_required', config('filesystems.disks.object.request_checksum_calculation'));
+    }
+
     public function test_private_file_can_be_materialized_for_local_only_libraries(): void
     {
         Storage::fake('private');
