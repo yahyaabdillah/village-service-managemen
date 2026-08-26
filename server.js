@@ -308,8 +308,9 @@ app.use((error, _req, res, next) => {
   return next(error);
 });
 
-const server = app.listen(port, '127.0.0.1', () => {
-  console.log(`Baileys bridge listening on http://127.0.0.1:${port}`);
+const host = process.env.WA_BRIDGE_HOST || '0.0.0.0';
+const server = app.listen(port, host, () => {
+  console.log(`Baileys bridge listening on http://${host}:${port}`);
   connect().catch((error) => {
     writeStatus({
       ready: false,
