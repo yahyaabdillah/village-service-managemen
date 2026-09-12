@@ -5,6 +5,7 @@
     $isReady = (bool) ($status['ready'] ?? false) && $isRunning;
     $isStale = (bool) ($status['stale'] ?? false);
     $state = $status['state'] ?? 'unknown';
+    $isLoggedOut = $state === 'logged_out';
     $statusClass = $isReady ? 'success' : ($isStale || in_array($state, ['error', 'logged_out'], true) ? 'danger' : 'warning');
 @endphp
 <div class="page-head">
@@ -39,10 +40,10 @@
     <p class="muted">Ready: {{ $isReady ? 'Ya' : 'Belum' }}</p>
     <p class="muted">Bridge berjalan: {{ $isRunning ? 'Ya' : 'Belum' }}</p>
     <div class="actions">
-        @if($isReady || $isStale)
+        @if($isReady || $isStale || $isLoggedOut)
             <form method="POST" action="{{ route('admin.whatsapp.disconnect') }}" onsubmit="return confirm('Putuskan WhatsApp dari aplikasi ini? Pairing ulang akan memerlukan QR baru.')">
                 @csrf
-                <button class="btn danger" type="submit"><i data-lucide="unlink"></i> {{ $isStale ? 'Bersihkan Sesi Stale' : 'Putuskan WhatsApp' }}</button>
+                <button class="btn danger" type="submit"><i data-lucide="unlink"></i> {{ $isStale ? 'Bersihkan Sesi Stale' : ($isLoggedOut ? 'Bersihkan Sesi Logout' : 'Putuskan WhatsApp') }}</button>
             </form>
         @else
             <form method="POST" action="{{ route('admin.whatsapp.start') }}">
@@ -59,9 +60,9 @@
     @if($isReady)
         <p><strong>Sesi WhatsApp sudah aktif.</strong></p>
         <p class="muted">QR disembunyikan setelah pairing berhasil. Gunakan tombol <strong>Putuskan WhatsApp</strong> jika ingin menautkan akun lain.</p>
-    @elseif($isStale)
+    @elseif($isStale || $isLoggedOut)
         <p><strong>QR tidak ditampilkan karena sesi lama belum dibersihkan.</strong></p>
-        <p class="muted">Klik <strong>Bersihkan Sesi Stale</strong>, lalu mulai pairing kembali.</p>
+        <p class="muted">Klik <strong>{{ $isLoggedOut ? 'Bersihkan Sesi Logout' : 'Bersihkan Sesi Stale' }}</strong>, lalu mulai pairing kembali.</p>
     @elseif($qrImage)
         <img src="{{ $qrImage }}" alt="QR untuk menautkan WhatsApp" width="320" height="320" style="display:block;max-width:100%;height:auto">
         <p class="muted">Buka WhatsApp di ponsel, pilih Perangkat tertaut, lalu scan QR ini.</p>

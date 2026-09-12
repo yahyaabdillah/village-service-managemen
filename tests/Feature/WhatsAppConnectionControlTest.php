@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\WhatsAppNotificationService;
 use App\Services\WindowsDetachedProcessLauncher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -67,6 +68,47 @@ class WhatsAppConnectionControlTest extends TestCase
             ->assertSee('Mulai Pairing / Tampilkan QR')
             ->assertSee(route('admin.whatsapp.start'), false)
             ->assertDontSee('Putuskan WhatsApp');
+    }
+
+    public function test_status_and_qr_are_read_from_bridge_api(): void
+    {
+        Http::fake([
+            '127.0.0.1:3100/status' => Http::response([
+                'ready' => false,
+                'state' => 'qr',
+                'provider' => 'baileys',
+            ]),
+            '127.0.0.1:3100/qr' => Http::response([
+                'qr' => 'pairing-payload',
+                'qrImage' => 'data:image/png;base64,abc',
+            ]),
+        ]);
+
+        $service = app(WhatsAppNotificationService::class);
+
+        $this->assertSame('qr', $service->status()['state']);
+        $this->assertSame('pairing-payload', $service->qr());
+        $this->assertSame('data:image/png;base64,abc', $service->qrImage());
+    }
+
+    public function test_logged_out_page_shows_session_cleanup_action(): void
+    {
+        Http::fake([
+            '127.0.0.1:3100/status' => Http::response([
+                'ready' => false,
+                'state' => 'logged_out',
+                'reason' => 401,
+            ]),
+            '127.0.0.1:3100/qr' => Http::response(['qr' => null, 'qrImage' => null]),
+        ]);
+        $this->seed();
+        $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+
+        $this->actingAs($admin)->get(route('admin.whatsapp.index'))
+            ->assertOk()
+            ->assertSee('Bersihkan Sesi Logout')
+            ->assertSee(route('admin.whatsapp.disconnect'), false)
+            ->assertDontSee('Mulai Pairing / Tampilkan QR');
     }
 
     public function test_stale_connected_page_shows_force_cleanup_action(): void

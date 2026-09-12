@@ -17,6 +17,10 @@ use Throwable;
 
 class WhatsAppNotificationService
 {
+    private ?array $bridgeQr = null;
+
+    private bool $bridgeQrFetched = false;
+
     public function __construct(private readonly WindowsDetachedProcessLauncher $windowsLauncher) {}
 
     public function notifySubmitted(ServiceRequest $serviceRequest): void
@@ -215,7 +219,16 @@ class WhatsAppNotificationService
             mkdir(dirname((string) config('whatsapp.bridge_log_file')), 0755, true);
         }
 
-        if ($this->isBridgeRunning()) {
+        $status = $this->status();
+        if (($status['state'] ?? null) === 'logged_out') {
+            return [
+                'started' => false,
+                'running' => true,
+                'message' => 'Sesi WhatsApp sudah logout. Bersihkan sesi terlebih dahulu untuk menampilkan QR baru.',
+            ];
+        }
+
+        if (($status['running'] ?? false) === true) {
             return ['started' => false, 'running' => true, 'message' => 'Bridge WhatsApp sudah berjalan.'];
         }
 
@@ -278,13 +291,8 @@ class WhatsAppNotificationService
 
     public function isBridgeRunning(): bool
     {
-        try {
-            return Http::timeout(1)
-                ->withToken((string) config('whatsapp.bridge_token'))
-                ->get(config('whatsapp.bridge_url').'/status')
-                ->successful();
-        } catch (\Throwable) {
-            // Fall back to the PID check for a bridge that is still booting.
+        if ($this->fetchBridgeStatus() !== null) {
+            return true;
         }
 
         $pidFile = (string) config('whatsapp.bridge_pid_file');
@@ -305,9 +313,17 @@ class WhatsAppNotificationService
 
     public function status(): array
     {
+        $remoteStatus = $this->fetchBridgeStatus();
+        if ($remoteStatus !== null) {
+            $remoteStatus['running'] = true;
+            $remoteStatus['stale'] = false;
+
+            return $remoteStatus;
+        }
+
         $path = (string) config('whatsapp.status_file');
         if (! is_file($path)) {
-            return ['ready' => false, 'state' => 'not_started', 'running' => $this->isBridgeRunning()];
+            return ['ready' => false, 'state' => 'not_started', 'running' => false, 'stale' => false];
         }
 
         $status = json_decode((string) file_get_contents($path), true) ?: ['ready' => false, 'state' => 'unknown'];
@@ -319,6 +335,11 @@ class WhatsAppNotificationService
 
     public function qr(): ?string
     {
+        $remoteQr = $this->fetchBridgeQr();
+        if ($remoteQr !== null && array_key_exists('qr', $remoteQr)) {
+            return is_string($remoteQr['qr']) ? $remoteQr['qr'] : null;
+        }
+
         $path = (string) config('whatsapp.qr_file');
 
         return is_file($path) ? file_get_contents($path) : null;
@@ -326,6 +347,11 @@ class WhatsAppNotificationService
 
     public function qrImage(): ?string
     {
+        $remoteQr = $this->fetchBridgeQr();
+        if ($remoteQr !== null && array_key_exists('qrImage', $remoteQr)) {
+            return is_string($remoteQr['qrImage']) ? $remoteQr['qrImage'] : null;
+        }
+
         $path = (string) config('whatsapp.qr_image_file');
         if (! is_file($path)) {
             return null;
@@ -342,21 +368,63 @@ class WhatsAppNotificationService
         ], base_path(), [
             'WHATSAPP_BRIDGE_TOKEN' => (string) config('whatsapp.bridge_token'),
             'WA_BRIDGE_STORAGE' => $storage,
-            'WA_BRIDGE_PORT' => '3100',
+            'WA_BRIDGE_PORT' => (string) $this->bridgePort(),
         ], (string) config('whatsapp.bridge_log_file'), (string) config('whatsapp.bridge_error_log_file'));
     }
 
     private function startBridgeOnUnix(string $storage): string
     {
         $command = sprintf(
-            'cd %s && WHATSAPP_BRIDGE_TOKEN=%s WA_BRIDGE_STORAGE=%s WA_BRIDGE_PORT=3100 nohup npm run wa:bridge >> %s 2>&1 & echo $!',
+            'cd %s && WHATSAPP_BRIDGE_TOKEN=%s WA_BRIDGE_STORAGE=%s WA_BRIDGE_PORT=%d nohup npm run wa:bridge >> %s 2>&1 & echo $!',
             escapeshellarg(base_path()),
             escapeshellarg((string) config('whatsapp.bridge_token')),
             escapeshellarg($storage),
+            $this->bridgePort(),
             escapeshellarg((string) config('whatsapp.bridge_log_file')),
         );
 
         return trim((string) shell_exec($command));
+    }
+
+    private function bridgePort(): int
+    {
+        $port = parse_url((string) config('whatsapp.bridge_url'), PHP_URL_PORT);
+
+        return is_int($port) || ctype_digit((string) $port) ? (int) $port : 3100;
+    }
+
+    private function fetchBridgeStatus(): ?array
+    {
+        try {
+            $response = Http::timeout(2)
+                ->withToken((string) config('whatsapp.bridge_token'))
+                ->get(config('whatsapp.bridge_url').'/status');
+
+            return $response->successful() ? ($response->json() ?: []) : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function fetchBridgeQr(): ?array
+    {
+        if ($this->bridgeQrFetched) {
+            return $this->bridgeQr;
+        }
+
+        $this->bridgeQrFetched = true;
+
+        try {
+            $response = Http::timeout(2)
+                ->withToken((string) config('whatsapp.bridge_token'))
+                ->get(config('whatsapp.bridge_url').'/qr');
+
+            $this->bridgeQr = $response->successful() ? ($response->json() ?: []) : null;
+        } catch (\Throwable) {
+            $this->bridgeQr = null;
+        }
+
+        return $this->bridgeQr;
     }
 
     private function stopPersistedBridgeProcess(): bool
