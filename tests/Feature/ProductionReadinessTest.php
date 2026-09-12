@@ -411,6 +411,12 @@ class ProductionReadinessTest extends TestCase
         $this->assertStringContainsString('moveForward(Math.min(panels.length - 1, index + 1))', $script);
     }
 
+    public function test_public_requirement_upload_limit_is_six_megabytes(): void
+    {
+        $this->assertStringContainsString('MAX_REQUIREMENT_FILE_SIZE_KB = 6144', File::get(app_path('Http/Controllers/PublicController.php')));
+        $this->assertStringContainsString("min((int) (\$req->max_file_size_kb ?: 6144), 6144)", File::get(resource_path('views/public/request-form.blade.php')));
+    }
+
     public function test_upload_forms_render_dropzone_boxes_for_public_and_admin_files(): void
     {
         $this->seed();

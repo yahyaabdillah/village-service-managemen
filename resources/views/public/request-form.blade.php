@@ -90,7 +90,7 @@
                 @php
                     $allowedTypes = $req->allowed_file_types ?: ['pdf','jpg','jpeg','png','docx','mp4','mov','webm'];
                     $accept = collect($allowedTypes)->map(fn ($type) => '.'.ltrim($type, '.'))->implode(',');
-                    $maxSize = min((int) ($req->max_file_size_kb ?: 5120), 5120);
+                    $maxSize = min((int) ($req->max_file_size_kb ?: 6144), 6144);
                 @endphp
                 @include('components.dropzone-file', [
                     'name' => 'requirements['.$req->id.']',

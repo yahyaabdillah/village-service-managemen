@@ -16,6 +16,8 @@ use Illuminate\Validation\Rule;
 
 class PublicController extends Controller
 {
+    private const MAX_REQUIREMENT_FILE_SIZE_KB = 6144;
+
     public function home()
     {
         return view('public.home', [
@@ -87,7 +89,7 @@ class PublicController extends Controller
         foreach ($service->requirements as $req) {
             $key = 'requirements.'.$req->id;
             $allowedTypes = $req->allowed_file_types ?: ['pdf', 'jpg', 'jpeg', 'png', 'docx'];
-            $maxSize = min((int) ($req->max_file_size_kb ?: 5120), 5120);
+            $maxSize = min((int) ($req->max_file_size_kb ?: self::MAX_REQUIREMENT_FILE_SIZE_KB), self::MAX_REQUIREMENT_FILE_SIZE_KB);
             $dynamicRules[$key] = array_filter([
                 $req->is_required ? 'required' : 'nullable',
                 'file',
