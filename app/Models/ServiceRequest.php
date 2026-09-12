@@ -152,8 +152,15 @@ class ServiceRequest extends Model
         ]);
 
         $requestId = $this->id;
-        DB::afterCommit(fn () => app(WhatsAppNotificationService::class)
-            ->notifyStatusChanged(static::find($requestId), $status, $publicNote));
+        DB::afterCommit(function () use ($requestId, $status, $publicNote): void {
+            $serviceRequest = static::with('serviceType')->find($requestId);
+            if (! $serviceRequest) {
+                return;
+            }
+
+            app(WhatsAppNotificationService::class)
+                ->notifyStatusChanged($serviceRequest, $status, $publicNote);
+        });
     }
 
     protected function casts(): array

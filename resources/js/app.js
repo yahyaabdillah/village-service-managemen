@@ -91,6 +91,26 @@ function initSteppers() {
         let index = 0;
         const panels = [...stepper.querySelectorAll('.step-panel')];
         const dots = [...stepper.querySelectorAll('.stepper-dot')];
+        const validatePanel = (panel) => {
+            const invalid = [...panel.querySelectorAll('input, select, textarea')]
+                .find((field) => !field.disabled && !field.checkValidity());
+            if (!invalid) return true;
+
+            invalid.reportValidity?.();
+            invalid.focus({ preventScroll: false });
+            return false;
+        };
+        const moveForward = (targetIndex) => {
+            for (let panelIndex = index; panelIndex < targetIndex; panelIndex += 1) {
+                if (!validatePanel(panels[panelIndex])) {
+                    index = panelIndex;
+                    show();
+                    return;
+                }
+            }
+            index = targetIndex;
+            show();
+        };
         const show = () => {
             panels.forEach((panel, panelIndex) => panel.classList.toggle('active', panelIndex === index));
             dots.forEach((dot, dotIndex) => dot.classList.toggle('active', dotIndex === index));
@@ -106,12 +126,15 @@ function initSteppers() {
             show();
         });
         stepper.querySelector('[data-next]')?.addEventListener('click', () => {
-            index = Math.min(panels.length - 1, index + 1);
-            show();
+            moveForward(Math.min(panels.length - 1, index + 1));
         });
         dots.forEach((dot, dotIndex) => dot.addEventListener('click', () => {
-            index = dotIndex;
-            show();
+            if (dotIndex <= index) {
+                index = dotIndex;
+                show();
+                return;
+            }
+            moveForward(dotIndex);
         }));
         show();
     });

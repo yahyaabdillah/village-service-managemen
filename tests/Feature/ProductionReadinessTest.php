@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\VillageProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
@@ -399,6 +400,15 @@ class ProductionReadinessTest extends TestCase
                 'fields.tanggal_keperluan',
                 'fields.jenis_keperluan',
             ]);
+    }
+
+    public function test_public_stepper_validates_the_current_step_before_advancing(): void
+    {
+        $script = File::get(resource_path('js/app.js'));
+
+        $this->assertStringContainsString('field.checkValidity()', $script);
+        $this->assertStringContainsString('invalid.reportValidity?.()', $script);
+        $this->assertStringContainsString('moveForward(Math.min(panels.length - 1, index + 1))', $script);
     }
 
     public function test_upload_forms_render_dropzone_boxes_for_public_and_admin_files(): void
