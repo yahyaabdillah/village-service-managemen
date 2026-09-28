@@ -16,7 +16,7 @@
         </div>
     </div>
     <div class="hero-visual">
-        <img src="{{ asset('images/village-service-hero.svg') }}" alt="Ilustrasi balai desa dan layanan administrasi digital" width="760" height="620">
+        <x-village-hero :village-name="$profile?->village_name" />
         <div class="hero-note">
             <span class="hero-note-icon"><i data-lucide="circle-check-big"></i></span>
             <span><strong>Proses terpantau</strong><small>Notifikasi setiap perubahan status</small></span>
