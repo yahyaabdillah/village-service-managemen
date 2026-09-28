@@ -173,12 +173,222 @@ function initDropzones() {
     });
 }
 
+function initComboboxes() {
+    document.querySelectorAll('[data-combobox]').forEach((box) => {
+        const select = box.querySelector('[data-combobox-source]');
+        const shell = box.querySelector('[data-combobox-shell]');
+        const chips = box.querySelector('[data-combobox-chips]');
+        const input = box.querySelector('.combobox-input');
+        const list = box.querySelector('.combobox-list');
+        if (!select || !shell || !chips || !input || !list) return;
+
+        const addable = box.hasAttribute('data-combobox-addable');
+        let active = -1;
+
+        // The <select> stays the submitted value; we only swap which control is visible,
+        // so the form still works when this script fails to load.
+        select.hidden = true;
+        select.tabIndex = -1;
+        shell.hidden = false;
+
+        const all = () => [...select.options];
+        const chosen = () => all().filter((option) => option.selected);
+        const shown = () => [...list.querySelectorAll('[role="option"]')];
+
+        const setActive = (index) => {
+            const items = shown();
+            items.forEach((item) => {
+                item.classList.remove('is-active');
+                item.setAttribute('aria-selected', 'false');
+            });
+            active = index;
+            const current = items[index];
+            if (current) {
+                current.classList.add('is-active');
+                current.setAttribute('aria-selected', 'true');
+                current.scrollIntoView({ block: 'nearest' });
+            }
+        };
+
+        const deselect = (option) => {
+            // Inline-created entries only exist in the DOM, so drop them entirely.
+            if (option.dataset.created === 'true') option.remove();
+            else option.selected = false;
+            renderChips();
+            renderList();
+            input.focus();
+        };
+
+        const renderChips = () => {
+            chips.replaceChildren();
+            chosen().forEach((option) => {
+                const chip = document.createElement('li');
+                chip.className = 'combobox-chip';
+                const text = document.createElement('span');
+                text.textContent = option.value;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'combobox-chip-remove';
+                remove.setAttribute('aria-label', `Hapus role ${option.value}`);
+                remove.textContent = '×';
+                remove.addEventListener('click', () => deselect(option));
+                chip.append(text, remove);
+                chips.appendChild(chip);
+            });
+            input.placeholder = chosen().length ? 'Tambah role lain...' : 'Ketik untuk mencari role...';
+        };
+
+        const addOption = (li, value) => {
+            li.setAttribute('role', 'option');
+            li.setAttribute('aria-selected', 'false');
+            li.dataset.value = value;
+            list.appendChild(li);
+        };
+
+        const renderList = () => {
+            const typed = input.value.trim();
+            const query = typed.toLowerCase();
+            list.replaceChildren();
+
+            all()
+                .filter((option) => !option.selected && option.value.toLowerCase().includes(query))
+                .forEach((option) => {
+                    const li = document.createElement('li');
+                    li.className = 'combobox-option';
+                    li.textContent = option.value;
+                    addOption(li, option.value);
+                });
+
+            const exists = all().some((option) => option.value.toLowerCase() === query);
+            if (addable && typed !== '' && !exists) {
+                const li = document.createElement('li');
+                li.className = 'combobox-create';
+                li.textContent = `Buat role baru: “${typed}”`;
+                li.dataset.create = 'true';
+                addOption(li, typed);
+            }
+
+            if (!list.children.length) {
+                const li = document.createElement('li');
+                li.className = 'combobox-empty';
+                li.textContent = typed ? 'Role tidak ditemukan.' : 'Semua role sudah dipilih.';
+                list.appendChild(li);
+            }
+
+            setActive(shown().length ? 0 : -1);
+        };
+
+        const open = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); renderList(); };
+        const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); setActive(-1); };
+
+        const choose = (li) => {
+            if (!li) return;
+            const value = li.dataset.value;
+            let option = all().find((candidate) => candidate.value === value);
+            if (!option) {
+                option = new Option(value, value);
+                option.dataset.created = 'true';
+                select.add(option);
+            }
+            option.selected = true;
+            input.value = '';
+            renderChips();
+            renderList();
+            input.focus();
+        };
+
+        input.addEventListener('focus', open);
+        // Also on click: after removing a chip the input already holds focus, so a
+        // focus listener alone would leave the list shut when the user clicks it.
+        input.addEventListener('click', open);
+        input.addEventListener('input', () => (list.hidden ? open() : renderList()));
+
+        // The control is styled as one text field, so its padding should behave like it.
+        shell.addEventListener('mousedown', (event) => {
+            if (event.target === shell || event.target === chips) {
+                event.preventDefault();
+                input.focus();
+                open();
+            }
+        });
+        box.querySelector('[data-combobox-toggle]')?.addEventListener('click', () => (list.hidden ? open() : close()));
+
+        // mousedown, not click: the input's blur must not close the list before selection lands.
+        list.addEventListener('mousedown', (event) => {
+            const li = event.target.closest('[role="option"]');
+            if (li) { event.preventDefault(); choose(li); }
+        });
+
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (list.hidden) { open(); return; }
+                const items = shown();
+                if (!items.length) return;
+                setActive((active + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length);
+            } else if (event.key === 'Enter') {
+                const items = shown();
+                if (!list.hidden && items[active]) { event.preventDefault(); choose(items[active]); }
+            } else if (event.key === 'Backspace' && input.value === '') {
+                const last = chosen().at(-1);
+                if (last) deselect(last);
+            } else if (event.key === 'Escape') {
+                close();
+            }
+        });
+
+        document.addEventListener('click', (event) => { if (!box.contains(event.target)) close(); });
+
+        renderChips();
+    });
+}
+
+function initPermissionPickers() {
+    document.querySelectorAll('[data-permission-picker]').forEach((picker) => {
+        const search = picker.querySelector('[data-permission-search]');
+        const items = [...picker.querySelectorAll('[data-permission-item]')];
+        const count = picker.querySelector('[data-permission-count]');
+        const empty = picker.querySelector('[data-permission-empty]');
+        const boxOf = (item) => item.querySelector('input[type="checkbox"]');
+
+        const render = () => {
+            if (count) count.textContent = `${items.filter((i) => boxOf(i).checked).length} dari ${items.length} izin`;
+        };
+
+        const filter = () => {
+            const query = (search?.value || '').trim().toLowerCase();
+            let shown = 0;
+            items.forEach((item) => {
+                const match = item.textContent.toLowerCase().includes(query);
+                item.hidden = !match;
+                if (match) shown += 1;
+            });
+            if (empty) empty.hidden = shown > 0;
+        };
+
+        // Bulk actions act on what is currently filtered, so "pilih semua" after a
+        // search means "select these matches" rather than silently ticking all 17.
+        const setVisible = (checked) => {
+            items.filter((item) => !item.hidden).forEach((item) => { boxOf(item).checked = checked; });
+            render();
+        };
+
+        search?.addEventListener('input', filter);
+        picker.addEventListener('change', render);
+        picker.querySelector('[data-permission-all]')?.addEventListener('click', () => setVisible(true));
+        picker.querySelector('[data-permission-none]')?.addEventListener('click', () => setVisible(false));
+        render();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons: interfaceIcons });
     initNavigation();
     initPhoneInputs();
     initSteppers();
     initDropzones();
+    initComboboxes();
+    initPermissionPickers();
     if (document.getElementById('request-trend-chart')) {
         import('./dashboard-chart').then(({ initDashboardChart }) => initDashboardChart());
     }

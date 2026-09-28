@@ -30,7 +30,7 @@
             <section class="step-panel field-grid">
                 @foreach($chunk as $field)
                     <div>
-                        @include('admin.crud.partials.field', ['field' => $field, 'item' => $item])
+                        @include('admin.crud.partials.field', ['field' => $field, 'item' => $item, 'options' => $options ?? []])
                     </div>
                 @endforeach
             </section>
@@ -44,7 +44,7 @@
         <div class="field-grid">
             @foreach($fields as $field)
                 <div>
-                    @include('admin.crud.partials.field', ['field' => $field, 'item' => $item])
+                    @include('admin.crud.partials.field', ['field' => $field, 'item' => $item, 'options' => $options ?? []])
                 </div>
             @endforeach
         </div>

@@ -171,6 +171,43 @@ code { overflow-wrap: anywhere; }
 .modal-shell { max-width: 42rem; margin: 4vh auto; }
 .drawer-shell { max-width: 54rem; margin-left: auto; min-height: calc(100vh - 8rem); }
 .phone-input { display: grid; grid-template-columns: 10rem 1fr; gap: .65rem; align-items: end; }
+
+/* Searchable + addable multi-role picker */
+.combobox { position: relative; }
+.combobox-source[hidden] { display: none; }
+.combobox-control { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; width: 100%; padding: .35rem 2.4rem .35rem .4rem; border: 1px solid #cbd8d0; border-radius: var(--radius-sm); background: #fff; cursor: text; transition: border-color .18s, box-shadow .18s; }
+.combobox-control:focus-within { border-color: var(--forest-600); box-shadow: 0 0 0 4px rgba(45, 122, 100, .12); }
+.combobox-chips { display: contents; margin: 0; padding: 0; list-style: none; }
+.combobox-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .3rem .22rem .55rem; border-radius: 999px; background: var(--sage-100); color: var(--forest-800); font-size: .8rem; font-weight: 700; }
+.combobox-chip-remove { display: grid; place-items: center; width: 1.15rem; height: 1.15rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--forest-700); font-size: .95rem; line-height: 1; cursor: pointer; }
+.combobox-chip-remove:hover { background: var(--forest-700); color: #fff; }
+.combobox-input { flex: 1 1 8rem; width: auto; min-width: 6rem; padding: .34rem .3rem; border: 0; border-radius: 0; background: transparent; }
+.combobox-input:focus { border: 0; outline: 0; box-shadow: none; }
+.combobox-toggle { position: absolute; top: .5rem; right: .4rem; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; padding: 0; border: 0; border-radius: .5rem; background: transparent; color: var(--muted); cursor: pointer; }
+.combobox-toggle:hover { background: var(--sage-100); color: var(--forest-800); }
+.combobox-toggle svg { width: 1rem; height: 1rem; transform: rotate(90deg); transition: transform .18s; }
+.combobox-control:has([aria-expanded="true"]) .combobox-toggle svg { transform: rotate(-90deg); }
+.combobox-list { position: absolute; z-index: 30; top: calc(100% + .3rem); left: 0; right: 0; max-height: 15rem; margin: 0; padding: .3rem; overflow-y: auto; list-style: none; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); box-shadow: var(--shadow-md); }
+.combobox-option, .combobox-create { padding: .5rem .6rem; border-radius: .45rem; font-size: .9rem; cursor: pointer; }
+.combobox-option.is-active, .combobox-create.is-active { background: var(--sage-100); color: var(--forest-800); }
+.combobox-create { color: var(--forest-700); font-weight: 700; }
+.combobox-create:not(:only-child) { margin-top: .2rem; border-top: 1px solid var(--line); border-radius: 0 0 .45rem .45rem; }
+.combobox-empty { padding: .5rem .6rem; color: var(--muted); font-size: .85rem; }
+
+/* Permission matrix on the role form */
+.field-grid > div:has(.permission-picker) { grid-column: 1 / -1; }
+.permission-picker { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--sage-50); }
+.permission-picker-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem; border-bottom: 1px solid var(--line); }
+.permission-picker-head .permission-search { flex: 1 1 12rem; width: auto; }
+/* Utility actions, so keep them quieter than the form's primary Simpan button. */
+.permission-picker-head .btn { padding: .4rem .7rem; font-size: .8rem; font-weight: 700; color: var(--forest-800); border: 1px solid #cbd8d0; background: #fff; }
+.permission-picker-head .btn:hover { color: var(--forest-900); background: var(--sage-100); border-color: var(--forest-600); }
+.permission-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: .25rem; margin: 0; padding: .6rem; list-style: none; max-height: 19rem; overflow-y: auto; }
+.permission-item label { display: flex; align-items: center; gap: .55rem; margin: 0; padding: .45rem .55rem; border-radius: .5rem; font-weight: 500; font-size: .88rem; cursor: pointer; }
+.permission-item label:hover { background: var(--sage-100); }
+.permission-item input[type="checkbox"] { width: 1rem; height: 1rem; flex: 0 0 auto; padding: 0; accent-color: var(--forest-700); }
+.permission-item:has(input:checked) label { background: #fff; color: var(--forest-800); font-weight: 700; box-shadow: var(--shadow-sm); }
+.permission-empty { grid-column: 1 / -1; padding: .5rem .55rem; color: var(--muted); font-size: .85rem; }
 .stepper-steps { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .stepper-dot { padding: .45rem .7rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #fff; }
 .stepper-dot.active { color: #fff; border-color: var(--forest-700); background: var(--forest-700); }

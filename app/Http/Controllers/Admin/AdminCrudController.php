@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class AdminCrudController extends Controller
@@ -35,6 +37,11 @@ class AdminCrudController extends Controller
     {
         [$class, $title] = $this->resolve($resource);
         $query = $class::query();
+        match ($resource) {
+            'users' => $query->with('roles'),
+            'roles' => $query->withCount('permissions'),
+            default => $query,
+        };
         if ($search = $request->string('q')->toString()) {
             $query = $this->applySearch($query, $resource, $search);
         }
@@ -56,6 +63,7 @@ class AdminCrudController extends Controller
             'title' => 'Tambah '.$title,
             'item' => new $class,
             'fields' => $this->fields($resource),
+            'options' => $this->options($resource),
         ]);
     }
 
@@ -64,7 +72,7 @@ class AdminCrudController extends Controller
         [$class] = $this->resolve($resource);
         $data = $this->validated($request, $resource);
         $item = $class::create($this->transform($data, $resource));
-        $this->syncRole($item, $request, $resource);
+        $this->syncRelations($item, $request, $resource);
 
         return redirect()->route('admin.'.$resource.'.index')->with('status', 'Data berhasil dibuat.');
     }
@@ -78,6 +86,7 @@ class AdminCrudController extends Controller
             'title' => 'Edit '.$title,
             'item' => $class::findOrFail($id),
             'fields' => $this->fields($resource),
+            'options' => $this->options($resource),
         ]);
     }
 
@@ -86,16 +95,19 @@ class AdminCrudController extends Controller
         [$class] = $this->resolve($resource);
         $item = $class::findOrFail($id);
         $data = $this->validated($request, $resource, $id);
+        $this->guardAgainstLockout($request, $resource, $item, 'save');
         $item->update($this->transform($data, $resource, $item));
-        $this->syncRole($item, $request, $resource);
+        $this->syncRelations($item, $request, $resource);
 
         return redirect()->route('admin.'.$resource.'.index')->with('status', 'Data berhasil diperbarui.');
     }
 
-    public function destroy(int $id, string $resource)
+    public function destroy(Request $request, int $id, string $resource)
     {
         [$class] = $this->resolve($resource);
-        $class::findOrFail($id)->delete();
+        $item = $class::findOrFail($id);
+        $this->guardAgainstLockout($request, $resource, $item, 'delete');
+        $item->delete();
 
         return back()->with('status', 'Data dihapus.');
     }
@@ -128,9 +140,23 @@ class AdminCrudController extends Controller
             'service-requirements' => ['service_type_id', 'name', 'is_required', 'max_file_size_kb'],
             'service-type-fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'is_required'],
             'announcements' => ['title', 'slug', 'is_published', 'published_at'],
-            'users' => ['name', 'email', 'is_active'],
-            'roles' => ['name', 'guard_name'],
+            'users' => ['name', 'email', 'role_label', 'is_active'],
+            'roles' => ['name', 'guard_name', 'permissions_count'],
             default => ['id'],
+        };
+    }
+
+    /** Choices the form needs that cannot be derived from the model itself. */
+    private function options(string $resource): array
+    {
+        return match ($resource) {
+            'users' => [
+                'roles' => Role::orderBy('name')->pluck('name')->all(),
+                // Inline role creation is a role-management action, so it needs that permission.
+                'can_create_roles' => (bool) request()->user()?->can('manage roles'),
+            ],
+            'roles' => ['permissions' => Permission::orderBy('name')->pluck('name')->all()],
+            default => [],
         };
     }
 
@@ -144,8 +170,8 @@ class AdminCrudController extends Controller
             'service-requirements' => ['service_type_id', 'name', 'description', 'is_required', 'allowed_file_types', 'max_file_size_kb', 'sort_order'],
             'service-type-fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'options', 'is_required', 'placeholder', 'help_text', 'sort_order'],
             'announcements' => ['title', 'slug', 'content', 'excerpt', 'published_at', 'is_published'],
-            'users' => ['name', 'email', 'password', 'phone', 'is_active', 'role'],
-            'roles' => ['name', 'guard_name'],
+            'users' => ['name', 'email', 'password', 'phone', 'is_active', 'roles'],
+            'roles' => ['name', 'guard_name', 'permissions'],
             default => [],
         };
     }
@@ -160,8 +186,8 @@ class AdminCrudController extends Controller
             'service-requirements' => ['service_type_id' => ['required', 'exists:service_types,id'], 'name' => ['required'], 'description' => ['nullable'], 'is_required' => ['nullable', 'boolean'], 'allowed_file_types' => ['nullable'], 'max_file_size_kb' => ['nullable', 'integer'], 'sort_order' => ['nullable', 'integer']],
             'service-type-fields' => ['service_type_id' => ['required', 'exists:service_types,id'], 'label' => ['required'], 'field_key' => ['required'], 'field_type' => ['required'], 'options' => ['nullable'], 'is_required' => ['nullable', 'boolean'], 'placeholder' => ['nullable'], 'help_text' => ['nullable'], 'sort_order' => ['nullable', 'integer']],
             'announcements' => ['title' => ['required'], 'slug' => ['nullable', 'unique:announcements,slug,'.($id ?? 'NULL').',id'], 'content' => ['required'], 'excerpt' => ['nullable'], 'published_at' => ['nullable', 'date'], 'is_published' => ['nullable', 'boolean']],
-            'users' => ['name' => ['required'], 'email' => ['required', 'email', 'unique:users,email,'.($id ?? 'NULL').',id'], 'password' => [$id ? 'nullable' : 'required', 'string', 'min:8'], 'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'], 'is_active' => ['nullable', 'boolean'], 'role' => ['nullable', 'exists:roles,name']],
-            'roles' => ['name' => ['required', 'unique:roles,name,'.($id ?? 'NULL').',id'], 'guard_name' => ['nullable']],
+            'users' => ['name' => ['required'], 'email' => ['required', 'email', 'unique:users,email,'.($id ?? 'NULL').',id'], 'password' => [$id ? 'nullable' : 'required', 'string', 'min:8'], 'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'], 'is_active' => ['nullable', 'boolean'], 'roles' => ['nullable', 'array'], 'roles.*' => ['nullable', 'string', 'max:255', $this->roleAssignable($request)]],
+            'roles' => ['name' => ['required', 'unique:roles,name,'.($id ?? 'NULL').',id'], 'guard_name' => ['nullable'], 'permissions' => ['nullable', 'array'], 'permissions.*' => ['string', 'exists:permissions,name']],
             default => [],
         };
 
@@ -192,7 +218,7 @@ class AdminCrudController extends Controller
             $data['phone'] = $this->normalizePhone($data['phone']);
         }
         if ($resource === 'users') {
-            unset($data['role']);
+            unset($data['roles']);
             if (! empty($data['password'])) {
                 $data['password'] = Hash::make($data['password']);
             } else {
@@ -200,6 +226,7 @@ class AdminCrudController extends Controller
             }
         }
         if ($resource === 'roles') {
+            unset($data['permissions']);
             $data['guard_name'] = $data['guard_name'] ?? 'web';
         }
 
@@ -216,10 +243,90 @@ class AdminCrudController extends Controller
         return '+62'.ltrim(preg_replace('/\D+/', '', $phone), '0');
     }
 
-    private function syncRole(Model $item, Request $request, string $resource): void
+    /**
+     * Assigning an existing role only needs `manage users`; naming a role that does not
+     * exist yet creates one, which is a `manage roles` action.
+     */
+    private function roleAssignable(Request $request): \Closure
     {
-        if ($resource === 'users' && $request->filled('role') && method_exists($item, 'syncRoles')) {
-            $item->syncRoles([$request->string('role')->toString()]);
+        return function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+            if (blank($value) || Role::where('name', $value)->exists()) {
+                return;
+            }
+            if (! $request->user()?->can('manage roles')) {
+                $fail('Role "'.$value.'" belum ada dan Anda tidak berhak membuat role baru.');
+            }
+        };
+    }
+
+    /** @return \Illuminate\Support\Collection<int, string> */
+    private function submittedRoles(Request $request): \Illuminate\Support\Collection
+    {
+        return collect($request->input('roles', []))
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function syncRelations(Model $item, Request $request, string $resource): void
+    {
+        if ($resource === 'users' && method_exists($item, 'syncRoles')) {
+            $item->syncRoles($this->submittedRoles($request)
+                ->map(fn (string $name) => Role::firstOrCreate(['name' => $name, 'guard_name' => 'web']))
+                ->all());
+        }
+        if ($resource === 'roles' && $item instanceof Role) {
+            $item->syncPermissions($request->input('permissions', []));
+        }
+    }
+
+    /**
+     * Roles are edited through the same role system that guards this screen, so it is
+     * possible to revoke your own access and be locked out. Block the cases that do.
+     */
+    private function guardAgainstLockout(Request $request, string $resource, ?Model $item, string $action): void
+    {
+        $user = $request->user();
+        if (! $user || ! $item) {
+            return;
+        }
+
+        // Editing your own account: the roles you end up with must still let you back in here.
+        if ($resource === 'users' && $action === 'save' && $item->getKey() === $user->getKey()) {
+            $names = $this->submittedRoles($request);
+            $keepsAccess = Role::whereIn('name', $names)->with('permissions')->get()
+                ->flatMap->permissions->pluck('name')
+                ->merge($user->getDirectPermissions()->pluck('name'))
+                ->contains('manage users');
+
+            if (! $keepsAccess) {
+                throw ValidationException::withMessages([
+                    'roles' => $names->isEmpty()
+                        ? 'Anda tidak dapat mengosongkan role akun Anda sendiri.'
+                        : 'Role yang tersisa tidak memberi izin "manage users", sehingga Anda akan kehilangan akses ke halaman ini.',
+                ]);
+            }
+        }
+
+        if ($resource !== 'roles' || ! $item instanceof Role || ! $user->hasRole($item->name)) {
+            return;
+        }
+
+        // Access may also come from another role or a direct permission; only block a real loss.
+        $keptElsewhere = $user->roles->where('name', '!=', $item->name)
+            ->flatMap->permissions->pluck('name')
+            ->merge($user->getDirectPermissions()->pluck('name'))
+            ->contains('manage roles');
+
+        $keptHere = $action === 'save' && in_array('manage roles', (array) $request->input('permissions', []), true);
+
+        if (! $keptElsewhere && ! $keptHere) {
+            throw ValidationException::withMessages([
+                $action === 'save' ? 'permissions' : 'name' => $action === 'save'
+                    ? 'Izin "manage roles" tidak boleh dicabut dari role yang Anda pakai sendiri, karena Anda akan kehilangan akses ke halaman ini.'
+                    : 'Role ini sedang Anda pakai dan merupakan satu-satunya sumber izin "manage roles" Anda, jadi tidak dapat dihapus.',
+            ]);
         }
     }
 }
