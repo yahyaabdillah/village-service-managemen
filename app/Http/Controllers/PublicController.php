@@ -27,6 +27,13 @@ class PublicController extends Controller
         ]);
     }
 
+    public function announcement(Announcement $announcement)
+    {
+        abort_unless($announcement->is_published, 404);
+
+        return view('public.announcement', compact('announcement'));
+    }
+
     public function services()
     {
         return view('public.services', [
@@ -54,7 +61,7 @@ class PublicController extends Controller
     {
         $data = $request->validate([
             'service_type_id' => ['required', Rule::exists('service_types', 'id')->where('is_active', true)],
-            'nik' => ['required', 'digits_between:8,20'],
+            'nik' => ['required', 'digits:16'],
             'applicant_name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'],
             'address' => ['required', 'string'],
@@ -193,12 +200,12 @@ class PublicController extends Controller
     public function checkStatus(Request $request)
     {
         $data = $request->validate([
-            'request_code' => ['required', 'string'],
-            'nik' => ['required', 'string'],
+            'request_code' => ['required', 'string', 'max:40'],
+            'nik' => ['required', 'digits:16'],
         ]);
 
-        $serviceRequest = ServiceRequest::with('serviceType', 'publicStatusHistories')
-            ->where('request_code', $data['request_code'])
+        $serviceRequest = ServiceRequest::with(['serviceType' => fn ($q) => $q->withTrashed(), 'publicStatusHistories'])
+            ->where('request_code', strtoupper(trim($data['request_code'])))
             ->where('nik', $data['nik'])
             ->first();
 

@@ -24,7 +24,7 @@ class VillageServiceMvpTest extends TestCase
 
         $this->get('/')
             ->assertOk()
-            ->assertSee('Sistem Layanan Desa')
+            ->assertSee('Desa Ngringo')
             ->assertSee('Surat Keterangan Domisili')
             ->assertSee('Cek Status Pengajuan');
     }

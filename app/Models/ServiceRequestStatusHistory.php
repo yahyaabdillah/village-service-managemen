@@ -19,6 +19,12 @@ class ServiceRequestStatusHistory extends Model
         return $this->belongsTo(ServiceRequest::class);
     }
 
+    /** The staff member who made the change; null when the system did (e.g. citizen submission). */
+    public function changedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'changed_by');
+    }
+
     protected function casts(): array
     {
         return [

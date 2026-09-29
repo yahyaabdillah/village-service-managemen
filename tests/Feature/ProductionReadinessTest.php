@@ -234,7 +234,7 @@ class ProductionReadinessTest extends TestCase
         $this->post(route('status.check'), [
             'request_code' => $request->request_code,
             'nik' => $request->nik,
-        ])->assertOk()->assertSee('Unduh Dokumen');
+        ])->assertOk()->assertSee('Unduh surat');
     }
 
     public function test_invalid_pdf_upload_is_rejected_instead_of_creating_a_fallback_document(): void
@@ -310,7 +310,9 @@ class ProductionReadinessTest extends TestCase
     {
         $this->seed();
         $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+        // A service with an active default template, so the publish action is offered.
         $request = ServiceRequest::factory()->create([
+            'service_type_id' => ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail()->id,
             'status' => 'verified',
             'applicant_name' => 'Yahya Abdillah',
             'address' => 'Dusun Krajan RT 01 RW 02',
@@ -447,7 +449,7 @@ class ProductionReadinessTest extends TestCase
         $this->seed();
         $admin = User::where('email', 'admin@desa.test')->firstOrFail();
         $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
-        $request = ServiceRequest::factory()->create(['service_type_id' => $service->id]);
+        $request = ServiceRequest::factory()->create(['service_type_id' => $service->id, 'status' => 'verified']);
 
         $this->get(route('requests.create', $service))
             ->assertOk()

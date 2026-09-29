@@ -153,13 +153,13 @@ class WhatsAppDocumentDeliveryTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.service-requests.show', $serviceRequest))
             ->assertOk()
-            ->assertSee('Kirim Dokumen via WhatsApp')
+            ->assertSee('Kirim ke WhatsApp warga')
             ->assertSee(route('admin.service-requests.documents.send-whatsapp', $serviceRequest), false);
 
         $this->actingAs($admin)
             ->post(route('admin.service-requests.documents.send-whatsapp', $serviceRequest))
             ->assertRedirect()
-            ->assertSessionHas('status', 'Dokumen berhasil dikirim lewat WhatsApp.');
+            ->assertSessionHas('status', fn ($status) => str_starts_with($status, 'Dokumen berhasil dikirim ke WhatsApp'));
 
         Http::assertSent(fn ($request) => $request->url() === 'http://127.0.0.1:3100/send-document'
             && $request->hasHeader('Authorization', 'Bearer test-token')

@@ -72,8 +72,9 @@
         @forelse($announcements as $announcement)
             <article class="announcement-card">
                 <span class="announcement-date"><i data-lucide="calendar-days"></i>{{ $announcement->published_at?->translatedFormat('d F Y') ?? 'Informasi terbaru' }}</span>
-                <h3>{{ $announcement->title }}</h3>
+                <h3><a class="announcement-link" href="{{ route('announcements.show', $announcement) }}">{{ $announcement->title }}</a></h3>
                 <p>{{ $announcement->excerpt ?: \Illuminate\Support\Str::limit(strip_tags($announcement->content), 150) }}</p>
+                <a class="text-link" href="{{ route('announcements.show', $announcement) }}">Baca selengkapnya <i data-lucide="arrow-right"></i></a>
             </article>
         @empty
             <div class="empty-illustration" style="grid-column:1/-1"><div><i data-lucide="megaphone"></i><strong>Belum ada pengumuman baru</strong><p>Informasi penting desa akan tampil di sini.</p></div></div>

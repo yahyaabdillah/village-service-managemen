@@ -25,12 +25,38 @@ class ServiceRequest extends Model
     {
         return [
             'submitted' => 'Pengajuan diterima',
-            'verified' => 'Sedang diverifikasi',
+            'verified' => 'Berkas diverifikasi',
             'processing' => 'Sedang diproses',
             'completed' => 'Selesai',
             'rejected' => 'Ditolak',
             'cancelled' => 'Dibatalkan',
         ];
+    }
+
+    /** Chip tone per status, shared by every screen that shows one. */
+    public static function statusTone(string $status): string
+    {
+        return match ($status) {
+            'submitted' => 'warning',
+            'verified' => 'info',
+            'processing' => 'progress',
+            'completed' => 'success',
+            'rejected' => 'danger',
+            default => 'muted',
+        };
+    }
+
+    /** What happens next, phrased for the clerk. */
+    public static function statusHint(string $status): string
+    {
+        return match ($status) {
+            'submitted' => 'Periksa data dan berkas, lalu verifikasi atau tolak.',
+            'verified' => 'Berkas lengkap. Terbitkan dokumen atau tandai sedang diproses.',
+            'processing' => 'Sedang dikerjakan. Terbitkan dokumen bila sudah siap.',
+            'completed' => 'Dokumen sudah terbit dan dapat diunduh warga.',
+            'rejected' => 'Pengajuan ditolak dan warga sudah diberi tahu alasannya.',
+            default => 'Pengajuan dibatalkan.',
+        };
     }
 
     public static function allowedTransitions(): array
@@ -81,7 +107,12 @@ class ServiceRequest extends Model
 
     public function statusHistories(): HasMany
     {
-        return $this->hasMany(ServiceRequestStatusHistory::class)->latest('created_at');
+        return $this->hasMany(ServiceRequestStatusHistory::class)->latest('created_at')->latest('id');
+    }
+
+    public function activeDocument(): ?GeneratedDocument
+    {
+        return $this->generatedDocuments->where('is_active', true)->sortByDesc('generated_at')->first();
     }
 
     public function publicStatusHistories(): HasMany

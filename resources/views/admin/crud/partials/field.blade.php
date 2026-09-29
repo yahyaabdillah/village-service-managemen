@@ -47,9 +47,9 @@
     @elseif($type === 'phone')
         <div class="phone-input">
             <select class="phone-country" aria-label="Kode negara">
-                <option value="+62" @selected(str_starts_with($rawPhone, '+62') || blank($rawPhone))>Indonesia (+62)</option>
-                <option value="+60" @selected(str_starts_with($rawPhone, '+60'))>Malaysia (+60)</option>
-                <option value="+65" @selected(str_starts_with($rawPhone, '+65'))>Singapura (+65)</option>
+                <option value="+62" @selected(str_starts_with($rawPhone, '+62') || blank($rawPhone))>+62 Indonesia</option>
+                <option value="+60" @selected(str_starts_with($rawPhone, '+60'))>+60 Malaysia</option>
+                <option value="+65" @selected(str_starts_with($rawPhone, '+65'))>+65 Singapura</option>
             </select>
             <input id="{{ $fieldId }}" class="phone-local" name="phone_number_display" value="{{ $localPhone }}" inputmode="numeric" autocomplete="tel-national" pattern="[1-9][0-9]{6,14}" placeholder="81234567890" @if($describedBy) aria-describedby="{{ $describedBy }}" @endif @if($hasError) aria-invalid="true" @endif>
             <input class="phone-combined" type="hidden" name="{{ $name }}" value="{{ $rawPhone }}">

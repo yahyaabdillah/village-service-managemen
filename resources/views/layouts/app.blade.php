@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#173f35">
-    <title>{{ $title ?? 'Sistem Layanan Desa' }}</title>
+    @php($villageName = \App\Models\VillageProfile::activeName())
+    <title>{{ isset($title) ? $title.' · ' : '' }}Layanan {{ $villageName }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="public-body">
@@ -14,8 +15,8 @@
         <a class="public-brand" href="{{ route('home') }}" aria-label="Kembali ke beranda">
             <span class="brand-mark"><i data-lucide="landmark"></i></span>
             <span>
-                <strong>{{ ($profile ?? null)?->village_name ?? 'Layanan Desa' }}</strong>
-                <small>Pelayanan warga terpadu</small>
+                <strong>{{ $villageName }}</strong>
+                <small>Layanan administrasi warga</small>
             </span>
         </a>
         <button class="public-menu-toggle icon-button" type="button" aria-label="Buka menu" aria-expanded="false" data-public-menu-toggle>
@@ -25,12 +26,15 @@
             <a class="{{ request()->routeIs('home') ? 'active' : '' }}" href="{{ route('home') }}">Beranda</a>
             <a class="{{ request()->routeIs('services.*', 'requests.*') ? 'active' : '' }}" href="{{ route('services.index') }}">Layanan</a>
             <a class="{{ request()->routeIs('status.*') ? 'active' : '' }}" href="{{ route('status.form') }}">Cek Status</a>
-            <a class="nav-admin" href="{{ route('login') }}"><i data-lucide="shield-check"></i> Portal Admin</a>
+            <a class="nav-admin" href="{{ auth()->check() ? route('admin.dashboard') : route('login') }}"><i data-lucide="shield-check"></i> {{ auth()->check() ? 'Panel Petugas' : 'Masuk Petugas' }}</a>
         </nav>
     </div>
 </header>
 
 <main class="public-main">
+    @if(session('status'))
+        <div class="alert notice" role="status"><i data-lucide="circle-check"></i><span>{{ session('status') }}</span></div>
+    @endif
     @if($errors->any())
         <div class="errors notice" role="alert">
             <i data-lucide="circle-alert"></i>
@@ -44,10 +48,10 @@
     <div class="footer-inner">
         <div class="footer-brand">
             <span class="brand-mark"><i data-lucide="landmark"></i></span>
-            <div><strong>{{ ($profile ?? null)?->village_name ?? 'Layanan Desa' }}</strong><p>Pelayanan publik yang mudah, transparan, dan aman.</p></div>
+            <div><strong>Pemerintah {{ $villageName }}</strong><p>Layanan administrasi warga secara daring.</p></div>
         </div>
-        <div class="footer-security"><i data-lucide="lock-keyhole"></i><span>Dokumen warga dilindungi dengan kode pengajuan dan NIK.</span></div>
-        <small>© {{ date('Y') }} Pemerintah Desa</small>
+        <div class="footer-security"><i data-lucide="lock-keyhole"></i><span>Data dan dokumen warga hanya dapat dibuka dengan kode pengajuan dan NIK.</span></div>
+        <small>© {{ date('Y') }} Pemerintah {{ $villageName }}</small>
     </div>
 </footer>
 </body>
