@@ -70,6 +70,7 @@ class AdminCrudController extends Controller
         $data = $this->validated($request, $resource);
         $item = $schema['model']::create($this->transform($data, $resource));
         $this->syncRelations($item, $request, $resource);
+        $this->audit($item, $resource, 'created');
 
         return redirect()->route('admin.'.$resource.'.index')->with('status', ucfirst($schema['singular']).' berhasil ditambahkan.');
     }
@@ -93,8 +94,10 @@ class AdminCrudController extends Controller
         $item = $schema['model']::findOrFail($id);
         $data = $this->validated($request, $resource, $id);
         $this->guardAgainstLockout($request, $resource, $item, 'save');
+        $before = $this->snapshot($item, $resource);
         $item->update($this->transform($data, $resource, $item));
         $this->syncRelations($item, $request, $resource);
+        $this->audit($item, $resource, 'updated', $before);
 
         return redirect()->route('admin.'.$resource.'.index')->with('status', 'Perubahan '.$schema['singular'].' disimpan.');
     }
@@ -104,6 +107,7 @@ class AdminCrudController extends Controller
         $schema = CrudSchema::resource($resource);
         $item = $schema['model']::findOrFail($id);
         $this->guardAgainstLockout($request, $resource, $item, 'delete');
+        $this->audit($item, $resource, 'deleted');
         $item->delete();
 
         return back()->with('status', ucfirst($schema['singular']).' dihapus.');
@@ -229,6 +233,55 @@ class AdminCrudController extends Controller
             ->filter()
             ->unique()
             ->values();
+    }
+
+    /**
+     * Users and roles are not covered by the model audit trait (their tables carry no
+     * created_by column), yet who was given which role or permission is exactly what an
+     * audit trail is for. Password hashes never reach the log.
+     *
+     * @param  array<string, mixed>|null  $before  snapshot taken before the update
+     */
+    private function audit(Model $item, string $resource, string $event, ?array $before = null): void
+    {
+        if (! in_array($resource, ['users', 'roles'], true)) {
+            return;
+        }
+        $after = $this->snapshot($item->fresh() ?? $item, $resource);
+        $properties = ['attributes' => $after];
+        if ($event === 'updated') {
+            $changed = array_filter($after, fn ($value, $key) => ($before[$key] ?? null) != $value, ARRAY_FILTER_USE_BOTH);
+            if ($changed === []) {
+                return;
+            }
+            $properties = [
+                'attributes' => array_intersect_key($after, ['name' => 1]) + $changed,
+                'old' => array_intersect_key($before ?? [], $changed),
+            ];
+        }
+
+        activity('business-model')
+            ->performedOn($item)
+            ->causedBy(auth()->user())
+            ->event($event)
+            ->withProperties($properties)
+            ->log(class_basename($item).' '.$event);
+    }
+
+    /** @return array<string, mixed> */
+    private function snapshot(Model $item, string $resource): array
+    {
+        if ($resource === 'users') {
+            return [
+                'name' => $item->name, 'email' => $item->email, 'is_active' => (bool) $item->is_active,
+                'roles' => $item->roles()->pluck('name')->sort()->values()->all(),
+            ];
+        }
+        if ($resource === 'roles') {
+            return ['name' => $item->name, 'permissions' => $item->permissions()->pluck('name')->sort()->values()->all()];
+        }
+
+        return [];
     }
 
     private function syncRelations(Model $item, Request $request, string $resource): void

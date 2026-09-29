@@ -1,40 +1,67 @@
-@extends('layouts.admin')
+@extends('layouts.admin', ['title' => 'Jejak Audit'])
 @section('content')
+@php use App\Support\AuditPresenter; @endphp
 <div class="page-head">
-    <div><span class="eyebrow">Akuntabilitas</span><h1>Jejak audit</h1><p class="muted">Riwayat perubahan data bisnis: siapa melakukan apa, terhadap data mana, dan kapan.</p></div>
+    <div>
+        <h1>Jejak Audit</h1>
+        <p class="muted">Siapa mengubah data apa, kapan, dan dari nilai apa menjadi apa. Tercatat otomatis untuk setiap pengajuan, data desa, pengguna, dan role.</p>
+    </div>
+    <div class="actions"><span class="badge plain muted">{{ number_format($todayCount, 0, ',', '.') }} perubahan hari ini</span></div>
 </div>
 
-<div class="audit-explainer">
-    <span class="audit-explainer-icon"><i data-lucide="history"></i></span>
-    <div><strong>Ini bukan pengganti monitoring server.</strong><p class="muted">Jejak audit dipakai untuk investigasi perubahan data dan akuntabilitas petugas. Error aplikasi, security, dan WhatsApp kini dikirim ke Grafana Loki.</p><a class="btn small" href="{{ config('observability.grafana_url') }}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> Buka dashboard Grafana</a></div>
-</div>
+@include('admin.observability.partials.log-tabs')
 
-<div class="card">
-    <form method="GET" class="filters">
-        <label class="sr-only" for="activity-search">Cari deskripsi</label><input id="activity-search" name="q" value="{{ request('q') }}" placeholder="Cari aktivitas...">
-        <label class="sr-only" for="activity-log">Jenis log</label><select id="activity-log" name="log_name"><option value="">Semua log</option>@foreach(['business-model'] as $log)<option value="{{ $log }}" @selected(request('log_name') === $log)>{{ $log }}</option>@endforeach</select>
-        <label class="sr-only" for="activity-event">Jenis kejadian</label><select id="activity-event" name="event"><option value="">Semua kejadian</option>@foreach(['created', 'updated', 'deleted'] as $event)<option value="{{ $event }}" @selected(request('event') === $event)>{{ ucfirst($event) }}</option>@endforeach</select>
-        <button class="btn" type="submit"><i data-lucide="list-filter"></i> Terapkan</button><a class="btn light" href="{{ route('admin.activity-logs.index') }}">Reset</a>
-    </form>
-</div>
+<form class="card audit-filter-card" method="GET" action="{{ route('admin.activity-logs.index') }}">
+    <div class="audit-filters">
+        <div class="field"><label for="audit-q">Cari</label><input id="audit-q" type="search" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Kode pengajuan, nama, NIK…"></div>
+        <div class="field"><label for="audit-subject">Jenis data</label><select id="audit-subject" name="subject"><option value="">Semua</option>@foreach($subjects as $key => $label)<option value="{{ $key }}" @selected(($filters['subject'] ?? '') === $key)>{{ $label }}</option>@endforeach</select></div>
+        <div class="field"><label for="audit-event">Tindakan</label><select id="audit-event" name="event"><option value="">Semua</option>@foreach(AuditPresenter::EVENTS as $key => $meta)<option value="{{ $key }}" @selected(($filters['event'] ?? '') === $key)>{{ $meta['label'] }}</option>@endforeach</select></div>
+        <div class="field"><label for="audit-user">Petugas</label><select id="audit-user" name="user"><option value="">Semua</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((int) ($filters['user'] ?? 0) === $user->id)>{{ $user->name }}</option>@endforeach</select></div>
+        <div class="field"><label for="audit-from">Dari tanggal</label><input id="audit-from" type="date" name="from" value="{{ $filters['from'] ?? '' }}"></div>
+        <div class="field"><label for="audit-to">Sampai</label><input id="audit-to" type="date" name="to" value="{{ $filters['to'] ?? '' }}"></div>
+        <div class="field audit-filter-actions"><button class="btn secondary" type="submit"><i data-lucide="list-filter"></i> Terapkan</button>@if(array_filter($filters))<a class="btn ghost" href="{{ route('admin.activity-logs.index') }}">Reset</a>@endif</div>
+    </div>
+</form>
 
-<div class="card">
-    <table>
-        <thead><tr><th>Waktu</th><th>Aktivitas</th><th>Objek data</th><th>Petugas</th><th>Keterangan</th></tr></thead>
-        <tbody>
-            @forelse($activities as $activity)
-                <tr>
-                    <td><strong>{{ $activity->created_at->translatedFormat('d M Y') }}</strong><br><small class="muted">{{ $activity->created_at->format('H:i:s') }}</small></td>
-                    <td><span class="log-event {{ $activity->event }}"><i data-lucide="{{ match($activity->event) {'created' => 'circle-plus', 'deleted' => 'trash-2', default => 'pencil'} }}"></i>{{ ucfirst($activity->event) }}</span></td>
-                    <td><span class="badge">{{ class_basename($activity->subject_type) }} #{{ $activity->subject_id }}</span></td>
-                    <td>{{ $activity->causer_id ? class_basename($activity->causer_type).' #'.$activity->causer_id : 'Sistem' }}</td>
-                    <td>{{ $activity->description }}</td>
-                </tr>
-            @empty
-                <tr><td colspan="5"><div class="empty-state"><span class="empty-icon"><i data-lucide="history"></i></span><strong>Belum ada aktivitas</strong><span>Perubahan data akan tercatat otomatis di sini.</span></div></td></tr>
-            @endforelse
-        </tbody>
-    </table>
-    {{ $activities->links() }}
-</div>
+@forelse($days as $date => $items)
+    <h2 class="audit-day">{{ \Illuminate\Support\Carbon::parse($date)->isToday() ? 'Hari ini' : (\Illuminate\Support\Carbon::parse($date)->isYesterday() ? 'Kemarin' : '') }} <span>{{ \Illuminate\Support\Carbon::parse($date)->translatedFormat('l, d F Y') }}</span></h2>
+    <ol class="audit-list">
+        @foreach($items as $activity)
+            @php $subject = AuditPresenter::subject($activity); $event = AuditPresenter::event($activity); $changes = AuditPresenter::changes($activity); @endphp
+            <li class="audit-item">
+                <time class="audit-time" datetime="{{ $activity->created_at->toIso8601String() }}">{{ $activity->created_at->format('H:i') }}</time>
+                <div class="audit-body">
+                    <p class="audit-line">
+                        <strong>{{ AuditPresenter::actor($activity) }}</strong>
+                        <span class="badge {{ $event['tone'] }} plain">{{ $event['label'] }}</span>
+                        <span class="muted">{{ strtolower($subject['label']) }}</span>
+                        @if($subject['url'])<a class="audit-subject" href="{{ $subject['url'] }}">{{ $subject['name'] }}</a>@else<span class="audit-subject">{{ $subject['name'] }}</span>@endif
+                    </p>
+                    @if($changes)
+                        <ul class="audit-diff">
+                            @foreach($changes as $change)
+                                <li>
+                                    <span class="diff-key">{{ $change['label'] }}</span>
+                                    <span>
+                                        @if($activity->event === 'updated')
+                                            <span class="diff-old">{{ $change['old'] ?? '—' }}</span><span class="diff-arrow" aria-hidden="true">→</span><span class="diff-new">{{ $change['new'] ?? '—' }}</span>
+                                        @else
+                                            <span class="{{ $activity->event === 'deleted' ? 'diff-old' : 'diff-new' }}">{{ $change['new'] }}</span>
+                                        @endif
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @elseif($activity->event === 'updated')
+                        <p class="audit-summary">Rincian perubahan tidak tercatat.</p>
+                    @endif
+                </div>
+            </li>
+        @endforeach
+    </ol>
+@empty
+    <div class="card"><div class="empty-state"><span class="empty-icon"><i data-lucide="history"></i></span><strong>{{ array_filter($filters) ? 'Tidak ada aktivitas yang cocok' : 'Belum ada aktivitas' }}</strong><span>{{ array_filter($filters) ? 'Longgarkan filter atau pilih rentang tanggal lain.' : 'Setiap perubahan data akan tercatat otomatis di sini.' }}</span></div></div>
+@endforelse
+
+@if($activities->hasPages())<div class="pagination-wrap audit-pagination">{{ $activities->links() }}</div>@endif
 @endsection

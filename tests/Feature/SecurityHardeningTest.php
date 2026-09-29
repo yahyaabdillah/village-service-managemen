@@ -338,9 +338,42 @@ class SecurityHardeningTest extends TestCase
             'description' => 'FamilyCard created',
         ]);
 
+        // Rendered for a clerk: who did what to which record, in Indonesian.
         $this->actingAs($admin)->get(route('admin.activity-logs.index'))
             ->assertOk()
-            ->assertSee('FamilyCard created');
+            ->assertSee('Menambahkan')
+            ->assertSee('kartu keluarga')
+            ->assertSee('Activity User')
+            ->assertSee($admin->name)
+            ->assertDontSee('FamilyCard created');
+    }
+
+    public function test_activity_log_shows_old_and_new_values_and_role_changes(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+        $card = \App\Models\FamilyCard::create(['family_card_number' => '3201019999990001', 'head_of_family_name' => 'Sebelum Ubah', 'address' => 'Jl. Lama']);
+
+        $this->actingAs($admin)->patch(route('admin.family-cards.update', $card), [
+            'family_card_number' => '3201019999990001', 'head_of_family_name' => 'Sesudah Ubah', 'address' => 'Jl. Lama',
+        ])->assertRedirect();
+
+        $activity = \Spatie\Activitylog\Models\Activity::where('subject_type', \App\Models\FamilyCard::class)->where('event', 'updated')->latest('id')->firstOrFail();
+        $this->assertSame('Sebelum Ubah', $activity->properties['old']['head_of_family_name']);
+        $this->assertSame('Sesudah Ubah', $activity->properties['attributes']['head_of_family_name']);
+        $this->assertArrayNotHasKey('address', $activity->properties['old'], 'unchanged columns are not part of the diff');
+
+        $this->actingAs($admin)->get(route('admin.activity-logs.index', ['event' => 'updated']))
+            ->assertOk()->assertSee('Sebelum Ubah')->assertSee('Sesudah Ubah')->assertSee('Kepala keluarga');
+
+        // Users are not covered by the model trait; the controller records them without the password hash.
+        $this->actingAs($admin)->post(route('admin.users.store'), [
+            'name' => 'Petugas Audit', 'email' => 'audit@desa.test', 'password' => 'rahasia-sekali', 'password_confirmation' => 'rahasia-sekali', 'roles' => ['Petugas'],
+        ])->assertRedirect();
+        $userActivity = \Spatie\Activitylog\Models\Activity::where('subject_type', User::class)->where('event', 'created')->latest('id')->firstOrFail();
+        $this->assertSame(['Petugas'], $userActivity->properties['attributes']['roles']);
+        $this->assertArrayNotHasKey('password', $userActivity->properties['attributes']);
+        $this->assertStringNotContainsString('rahasia-sekali', json_encode($userActivity->properties));
     }
 
     public function test_security_log_dashboard_is_permission_protected(): void
@@ -395,13 +428,16 @@ class SecurityHardeningTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.activity-logs.index', [
             'event' => 'created',
-            'q' => 'FamilyCard',
-        ]))->assertOk()->assertSee('FamilyCard created');
+            'q' => 'Filter Activity',
+        ]))->assertOk()->assertSee('Filter Activity');
 
         $this->actingAs($admin)->get(route('admin.activity-logs.index', [
             'event' => 'deleted',
             'q' => 'No Match',
-        ]))->assertOk()->assertDontSee('FamilyCard created');
+        ]))->assertOk()->assertDontSee('Filter Activity');
+
+        $this->actingAs($admin)->get(route('admin.activity-logs.index', ['subject' => 'Resident']))
+            ->assertOk()->assertDontSee('Filter Activity');
     }
 
     public function test_excel_template_download_and_import(): void
