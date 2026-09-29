@@ -185,8 +185,7 @@ class CrudSchema
                     'permissions' => ['label' => 'Izin', 'type' => 'permissions'],
                 ],
             ],
-            // The three service-configuration tables keep a plain CRUD until the dedicated
-            // configuration screen supersedes them.
+            // Creating a service type uses the generic form; configuring it has its own screen.
             'service-types' => [
                 'model' => ServiceType::class, 'title' => 'Jenis Layanan', 'singular' => 'jenis layanan',
                 'description' => 'Jenis surat yang dapat diajukan warga.',
@@ -204,50 +203,6 @@ class CrudSchema
                     'description' => ['label' => 'Deskripsi', 'type' => 'textarea'],
                     'sort_order' => ['label' => 'Urutan tampil', 'type' => 'number'],
                     'is_active' => ['label' => 'Dapat diajukan warga', 'type' => 'boolean', 'default' => true],
-                ],
-            ],
-            'service-requirements' => [
-                'model' => ServiceRequirement::class, 'title' => 'Syarat Berkas', 'singular' => 'syarat berkas',
-                'description' => 'Berkas yang harus dilampirkan warga untuk tiap layanan.',
-                'with' => ['serviceType'], 'search' => ['name'],
-                'columns' => [
-                    'name' => ['label' => 'Berkas', 'type' => 'title', 'sub' => fn ($r) => $r->serviceType?->name],
-                    'is_required' => ['label' => 'Wajib', 'type' => 'boolean', 'labels' => ['Wajib', 'Opsional']],
-                    'max_file_size_kb' => ['label' => 'Maks. ukuran', 'value' => fn ($r) => $r->max_file_size_kb ? round($r->max_file_size_kb / 1024, 1).' MB' : '-'],
-                ],
-                'sections' => [['title' => 'Syarat berkas', 'fields' => ['service_type_id', 'name', 'description', 'is_required', 'allowed_file_types', 'max_file_size_kb', 'sort_order']]],
-                'fields' => [
-                    'service_type_id' => ['label' => 'Layanan', 'type' => 'select', 'required' => true, 'options' => fn () => ServiceType::orderBy('name')->pluck('name', 'id')->all()],
-                    'name' => ['label' => 'Nama berkas', 'type' => 'text', 'required' => true, 'placeholder' => 'KTP pemohon'],
-                    'description' => ['label' => 'Petunjuk untuk warga', 'type' => 'textarea'],
-                    'is_required' => ['label' => 'Wajib dilampirkan', 'type' => 'boolean', 'default' => true],
-                    'allowed_file_types' => ['label' => 'Jenis berkas', 'type' => 'tags', 'help' => 'Pisahkan dengan koma, misalnya: pdf, jpg, png.'],
-                    'max_file_size_kb' => ['label' => 'Ukuran maksimal (KB)', 'type' => 'number', 'placeholder' => '5120'],
-                    'sort_order' => ['label' => 'Urutan', 'type' => 'number'],
-                ],
-            ],
-            'service-type-fields' => [
-                'model' => ServiceTypeField::class, 'title' => 'Isian Formulir', 'singular' => 'isian formulir',
-                'description' => 'Pertanyaan tambahan yang ditanyakan kepada warga pada tiap layanan.',
-                'with' => ['serviceType'], 'search' => ['label', 'field_key'],
-                'columns' => [
-                    'label' => ['label' => 'Isian', 'type' => 'title', 'sub' => fn ($f) => $f->serviceType?->name],
-                    'field_type' => ['label' => 'Tipe', 'value' => fn ($f) => self::FIELD_TYPES[$f->field_type] ?? $f->field_type],
-                    'is_required' => ['label' => 'Wajib', 'type' => 'boolean', 'labels' => ['Wajib', 'Opsional']],
-                    'is_active' => ['label' => 'Status', 'type' => 'boolean', 'labels' => ['Tampil', 'Tersembunyi']],
-                ],
-                'sections' => [['title' => 'Isian formulir', 'fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'options', 'is_required', 'is_active', 'placeholder', 'help_text', 'sort_order']]],
-                'fields' => [
-                    'service_type_id' => ['label' => 'Layanan', 'type' => 'select', 'required' => true, 'options' => fn () => ServiceType::orderBy('name')->pluck('name', 'id')->all()],
-                    'label' => ['label' => 'Pertanyaan / label', 'type' => 'text', 'required' => true],
-                    'field_key' => ['label' => 'Kunci isian', 'type' => 'text', 'required' => true, 'help' => 'Huruf kecil dan garis bawah, misalnya nama_usaha. Dipakai sebagai nama variabel di template surat.'],
-                    'field_type' => ['label' => 'Tipe isian', 'type' => 'select', 'required' => true, 'options' => self::FIELD_TYPES],
-                    'options' => ['label' => 'Daftar pilihan', 'type' => 'tags', 'help' => 'Hanya untuk tipe Pilihan. Pisahkan dengan koma.'],
-                    'is_required' => ['label' => 'Wajib diisi', 'type' => 'boolean', 'default' => true],
-                    'is_active' => ['label' => 'Tampil di formulir warga', 'type' => 'boolean', 'default' => true],
-                    'placeholder' => ['label' => 'Contoh isian', 'type' => 'text'],
-                    'help_text' => ['label' => 'Petunjuk', 'type' => 'textarea', 'attrs' => ['rows' => 2]],
-                    'sort_order' => ['label' => 'Urutan', 'type' => 'number'],
                 ],
             ],
         ];

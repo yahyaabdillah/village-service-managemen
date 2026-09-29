@@ -123,8 +123,6 @@ class ProductionReadinessTest extends TestCase
             'family-cards' => FamilyCard::firstOrFail(),
             'residents' => Resident::firstOrFail(),
             'service-types' => ServiceType::firstOrFail(),
-            'service-requirements' => ServiceRequirement::firstOrFail(),
-            'service-type-fields' => ServiceTypeField::firstOrFail(),
             'announcements' => Announcement::firstOrFail(),
             'users' => User::firstOrFail(),
             'roles' => Role::firstOrFail(),
@@ -334,26 +332,53 @@ class ProductionReadinessTest extends TestCase
         $admin = User::where('email', 'admin@desa.test')->firstOrFail();
         $service = ServiceType::firstOrFail();
 
-        $this->actingAs($admin)->get(route('admin.service-types.index'))->assertOk();
-        $this->actingAs($admin)->get(route('admin.service-requirements.index'))->assertOk();
-        $this->actingAs($admin)->get(route('admin.service-type-fields.index'))->assertOk();
+        $this->actingAs($admin)->get(route('admin.service-types.index'))->assertOk()->assertSee('Konfigurasi Layanan');
+        $this->actingAs($admin)->get(route('admin.service-types.edit', [$service, 'tab' => 'isian']))->assertOk()->assertSee('Isian formulir');
         $this->actingAs($admin)->get(route('admin.announcements.index'))->assertOk();
         $this->actingAs($admin)->get(route('admin.users.index'))->assertOk();
         $this->actingAs($admin)->get(route('admin.roles.index'))->assertOk();
         $this->actingAs($admin)->get(route('admin.document-templates.index'))->assertOk();
 
-        $this->actingAs($admin)->post(route('admin.service-type-fields.store'), [
-            'service_type_id' => $service->id,
+        // A custom question added from the configuration screen; the variable name is
+        // derived from the label when left blank.
+        $this->actingAs($admin)->post(route('admin.service-types.fields.store', $service), [
             'label' => 'Tanggal Keperluan',
-            'field_key' => 'tanggal_keperluan',
             'field_type' => 'date',
             'is_required' => 1,
+            'is_active' => 1,
             'sort_order' => 2,
-        ])->assertRedirect();
+        ])->assertRedirect(route('admin.service-types.edit', [$service, 'tab' => 'isian']));
 
         $this->assertDatabaseHas('service_type_fields', [
             'service_type_id' => $service->id,
             'field_key' => 'tanggal_keperluan',
+            'is_active' => true,
+        ]);
+
+        // Duplicate variable names on the same service are refused with a message, not a 500.
+        $this->actingAs($admin)->post(route('admin.service-types.fields.store', $service), [
+            'label' => 'Tanggal Keperluan',
+            'field_type' => 'text',
+        ])->assertSessionHasErrors('field_key');
+
+        // A select needs its options.
+        $this->actingAs($admin)->post(route('admin.service-types.fields.store', $service), [
+            'label' => 'Jenis Usaha',
+            'field_type' => 'select',
+            'options_text' => '',
+        ])->assertSessionHasErrors('options_text');
+
+        $this->actingAs($admin)->post(route('admin.service-types.requirements.store', $service), [
+            'name' => 'Surat pengantar RT',
+            'allowed_file_types' => ['pdf', 'jpg'],
+            'max_file_size_kb' => 2048,
+            'is_required' => 1,
+        ])->assertRedirect(route('admin.service-types.edit', [$service, 'tab' => 'berkas']));
+
+        $this->assertDatabaseHas('service_requirements', [
+            'service_type_id' => $service->id,
+            'name' => 'Surat pengantar RT',
+            'max_file_size_kb' => 2048,
         ]);
     }
 

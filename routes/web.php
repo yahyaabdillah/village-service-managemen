@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DocumentTemplateController;
 use App\Http\Controllers\Admin\ObservabilityController;
 use App\Http\Controllers\Admin\ResidentImportExportController;
+use App\Http\Controllers\Admin\ServiceConfigurationController;
 use App\Http\Controllers\Admin\ServiceRequestController;
 use App\Http\Controllers\Admin\WhatsAppController;
 use App\Http\Controllers\AuthController;
@@ -87,15 +88,28 @@ Route::prefix('admin')
         Route::post('/residents/import-preview', [ResidentImportExportController::class, 'preview'])->middleware($can('residents.import'))->name('residents.import-preview');
         Route::post('/residents/import', [ResidentImportExportController::class, 'import'])->middleware($can('residents.import'))->name('residents.import');
 
+        // Service configuration: one screen per letter type (info, custom fields, documents, templates).
+        Route::get('/service-types', [ServiceConfigurationController::class, 'index'])->middleware($can('service-types.view'))->name('service-types.index');
+        Route::get('/service-types/create', [AdminCrudController::class, 'create'])->middleware($can('service-types.create'))->defaults('resource', 'service-types')->name('service-types.create');
+        Route::post('/service-types', [AdminCrudController::class, 'store'])->middleware($can('service-types.create'))->defaults('resource', 'service-types')->name('service-types.store');
+        Route::middleware($can('service-types.update'))->group(function () {
+            Route::get('/service-types/{serviceType}/edit', [ServiceConfigurationController::class, 'edit'])->name('service-types.edit');
+            Route::patch('/service-types/{serviceType}', [ServiceConfigurationController::class, 'update'])->name('service-types.update');
+            Route::post('/service-types/{serviceType}/fields', [ServiceConfigurationController::class, 'storeField'])->name('service-types.fields.store');
+            Route::patch('/service-types/{serviceType}/fields/{field}', [ServiceConfigurationController::class, 'updateField'])->name('service-types.fields.update');
+            Route::delete('/service-types/{serviceType}/fields/{field}', [ServiceConfigurationController::class, 'destroyField'])->name('service-types.fields.destroy');
+            Route::post('/service-types/{serviceType}/requirements', [ServiceConfigurationController::class, 'storeRequirement'])->name('service-types.requirements.store');
+            Route::patch('/service-types/{serviceType}/requirements/{requirement}', [ServiceConfigurationController::class, 'updateRequirement'])->name('service-types.requirements.update');
+            Route::delete('/service-types/{serviceType}/requirements/{requirement}', [ServiceConfigurationController::class, 'destroyRequirement'])->name('service-types.requirements.destroy');
+        });
+        Route::delete('/service-types/{id}', [AdminCrudController::class, 'destroy'])->middleware($can('service-types.delete'))->defaults('resource', 'service-types')->name('service-types.destroy');
+
         // Generic CRUD screens. Each URL resource maps onto a catalogued permission resource;
         // the three service-configuration tables share one, since they describe one thing.
         $resourcePermissions = [
             'village-profiles' => 'village-profile',
             'family-cards' => 'family-cards',
             'residents' => 'residents',
-            'service-types' => 'service-types',
-            'service-requirements' => 'service-types',
-            'service-type-fields' => 'service-types',
             'announcements' => 'announcements',
             'users' => 'users',
             'roles' => 'roles',

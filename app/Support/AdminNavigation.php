@@ -23,7 +23,7 @@ class AdminNavigation
             'Data Desa' => [
                 self::link('residents.view', 'admin.residents.index', ['admin.residents.*'], 'users', 'Penduduk'),
                 self::link('family-cards.view', 'admin.family-cards.index', ['admin.family-cards.*'], 'contact-round', 'Kartu Keluarga'),
-                self::link('service-types.view', 'admin.service-types.index', ['admin.service-types.*', 'admin.service-requirements.*', 'admin.service-type-fields.*'], 'grid-2x2-check', 'Konfigurasi Layanan'),
+                self::link('service-types.view', 'admin.service-types.index', ['admin.service-types.*'], 'grid-2x2-check', 'Konfigurasi Layanan'),
                 self::link('document-templates.view', 'admin.document-templates.index', ['admin.document-templates.*'], 'file-pen-line', 'Template Dokumen'),
                 self::link('announcements.view', 'admin.announcements.index', ['admin.announcements.*'], 'megaphone', 'Pengumuman'),
                 self::link('village-profile.view', 'admin.village-profiles.index', ['admin.village-profiles.*'], 'landmark', 'Profil Desa'),

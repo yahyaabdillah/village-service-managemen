@@ -23,8 +23,6 @@ class AdminCrudController extends Controller
     /** URL resource → permission resource in PermissionCatalog. */
     private const PERMISSION_KEY = [
         'village-profiles' => 'village-profile',
-        'service-requirements' => 'service-types',
-        'service-type-fields' => 'service-types',
     ];
 
     public function index(Request $request, string $resource)
@@ -139,13 +137,6 @@ class AdminCrudController extends Controller
             'residents' => ['family_card_id' => ['nullable', 'exists:family_cards,id'], 'nik' => ['required', 'digits:16', $unique('residents', 'nik')], 'name' => ['required', 'string', 'max:255'], 'gender' => ['required', 'in:male,female'], 'birth_place' => ['nullable', 'string', 'max:255'], 'birth_date' => ['nullable', 'date', 'before:tomorrow'], 'address' => ['required', 'string'], 'hamlet' => ['nullable', 'string', 'max:255'], 'rt' => ['nullable', 'string', 'max:10'], 'rw' => ['nullable', 'string', 'max:10'], 'religion' => ['nullable', 'string', 'max:50'], 'marital_status' => ['nullable', 'string', 'max:50'], 'occupation' => ['nullable', 'string', 'max:255'], 'phone' => $phone, 'is_active' => ['nullable', 'boolean']],
             'village-profiles' => ['village_name' => ['required', 'string', 'max:255'], 'district' => ['nullable', 'string', 'max:255'], 'regency' => ['nullable', 'string', 'max:255'], 'province' => ['nullable', 'string', 'max:255'], 'address' => ['nullable', 'string'], 'phone' => $phone, 'email' => ['nullable', 'email'], 'website' => ['nullable', 'url'], 'village_head_name' => ['nullable', 'string', 'max:255'], 'village_head_nip' => ['nullable', 'string', 'max:50'], 'default_signer_name' => ['nullable', 'string', 'max:255'], 'default_signer_title' => ['nullable', 'string', 'max:255'], 'is_active' => ['nullable', 'boolean']],
             'service-types' => ['name' => ['required', 'string', 'max:255'], 'slug' => ['nullable', 'alpha_dash', $unique('service_types', 'slug')], 'description' => ['nullable', 'string'], 'is_active' => ['nullable', 'boolean'], 'sort_order' => ['nullable', 'integer', 'min:0']],
-            'service-requirements' => ['service_type_id' => ['required', 'exists:service_types,id'], 'name' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string'], 'is_required' => ['nullable', 'boolean'], 'allowed_file_types' => ['nullable', 'string'], 'max_file_size_kb' => ['nullable', 'integer', 'min:1', 'max:6144'], 'sort_order' => ['nullable', 'integer', 'min:0']],
-            'service-type-fields' => ['service_type_id' => ['required', 'exists:service_types,id'], 'label' => ['required', 'string', 'max:255'], 'field_key' => ['required', 'regex:/^[a-z][a-z0-9_]*$/', 'max:100', function ($attribute, $value, $fail) use ($request, $id) {
-                $exists = \App\Models\ServiceTypeField::where('service_type_id', $request->input('service_type_id'))->where('field_key', $value)->when($id, fn ($q) => $q->whereKeyNot($id))->exists();
-                if ($exists) {
-                    $fail('Kunci isian ini sudah dipakai pada layanan yang sama.');
-                }
-            }], 'field_type' => ['required', 'in:'.implode(',', array_keys(CrudSchema::FIELD_TYPES))], 'options' => ['nullable', 'string', 'required_if:field_type,select'], 'is_required' => ['nullable', 'boolean'], 'is_active' => ['nullable', 'boolean'], 'placeholder' => ['nullable', 'string', 'max:255'], 'help_text' => ['nullable', 'string', 'max:1000'], 'sort_order' => ['nullable', 'integer', 'min:0']],
             'announcements' => ['title' => ['required', 'string', 'max:255'], 'content' => ['required', 'string'], 'excerpt' => ['nullable', 'string', 'max:500'], 'published_at' => ['nullable', 'date'], 'is_published' => ['nullable', 'boolean']],
             'users' => ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', $unique('users', 'email')], 'password' => [$id ? 'nullable' : 'required', 'string', 'min:8'], 'phone' => $phone, 'is_active' => ['nullable', 'boolean'], 'roles' => ['nullable', 'array'], 'roles.*' => ['nullable', 'string', 'max:255', $this->roleAssignable($request)]],
             'roles' => ['name' => ['required', 'string', 'max:255', $unique('roles', 'name')], 'permissions' => ['nullable', 'array'], 'permissions.*' => ['string', 'exists:permissions,name']],
@@ -169,13 +160,6 @@ class AdminCrudController extends Controller
             $data['slug'] = $item?->slug ?: Str::slug($data['title']).'-'.Str::lower(Str::random(4));
             if (! empty($data['is_published']) && empty($data['published_at'])) {
                 $data['published_at'] = now();
-            }
-        }
-        if (in_array($resource, ['service-requirements', 'service-type-fields'], true)) {
-            foreach (['allowed_file_types', 'options'] as $list) {
-                if (array_key_exists($list, $data)) {
-                    $data[$list] = is_string($data[$list]) ? array_values(array_filter(array_map('trim', explode(',', $data[$list])))) : ($data[$list] ?? []);
-                }
             }
         }
         if (array_key_exists('phone', $data) && filled($data['phone'])) {

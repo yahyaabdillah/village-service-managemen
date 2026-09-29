@@ -176,6 +176,62 @@ function initConfirmDialogs() {
     });
 }
 
+
+// Tabbed screens: the links carry ?tab= so a reload lands on the same tab; on click we
+// just switch panels without a round trip.
+function initTabs() {
+    document.querySelectorAll('[data-tabs]').forEach((root) => {
+        const tabs = [...root.querySelectorAll('[data-tab]')];
+        const panels = [...root.querySelectorAll('[data-tab-panel]')];
+        const activate = (key) => {
+            tabs.forEach((tab) => { const on = tab.dataset.tab === key; tab.classList.toggle('active', on); tab.setAttribute('aria-selected', String(on)); });
+            panels.forEach((panel) => panel.classList.toggle('active', panel.dataset.tabPanel === key));
+        };
+        tabs.forEach((tab) => tab.addEventListener('click', (event) => {
+            event.preventDefault();
+            activate(tab.dataset.tab);
+            const url = new URL(tab.href, window.location.href);
+            window.history.replaceState(null, '', url.pathname + url.search);
+        }));
+    });
+}
+
+// Native <dialog> forms: [data-dialog-open="#id"] opens, [data-dialog-close] closes, and a
+// dialog rendered with [data-open] (validation errors) opens itself on load.
+function initDialogs() {
+    document.querySelectorAll('[data-dialog-open]').forEach((button) => button.addEventListener('click', () => {
+        const dialog = document.querySelector(button.dataset.dialogOpen);
+        if (dialog?.showModal) { dialog.showModal(); dialog.querySelector('input:not([type=hidden]), select, textarea')?.focus(); }
+    }));
+    document.querySelectorAll('[data-dialog-close]').forEach((button) => button.addEventListener('click', () => button.closest('dialog')?.close()));
+    document.querySelectorAll('dialog[data-open]').forEach((dialog) => { if (dialog.showModal && !dialog.open) dialog.showModal(); });
+    // Click on the backdrop closes.
+    document.querySelectorAll('dialog.form-dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+    }));
+}
+
+// Field editor helpers: derive the variable name from the label until the user edits it,
+// and only show the options box for the "select" type.
+function initFieldEditors() {
+    document.querySelectorAll('[data-slug-source]').forEach((source) => {
+        const target = document.querySelector(source.dataset.slugSource);
+        if (!target || target.hasAttribute('data-slug-locked')) return;
+        let touched = target.value !== '';
+        target.addEventListener('input', () => { touched = target.value !== ''; });
+        source.addEventListener('input', () => {
+            if (touched) return;
+            target.value = source.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/^[0-9]+/, '');
+        });
+    });
+    document.querySelectorAll('[data-field-type]').forEach((select) => {
+        const wrap = select.closest('form')?.querySelector('[data-options-wrap]');
+        const sync = () => { if (wrap) wrap.hidden = select.value !== 'select'; };
+        select.addEventListener('change', sync);
+        sync();
+    });
+}
+
 function initDropzones() {
     document.querySelectorAll('[data-dropzone]').forEach((zone) => {
         const input = zone.querySelector('.dropzone-input');
@@ -448,6 +504,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initPermissionPickers();
     initPermissionMatrix();
     initConfirmDialogs();
+    initTabs();
+    initDialogs();
+    initFieldEditors();
     if (document.getElementById('request-trend-chart')) {
         import('./dashboard-chart').then(({ initDashboardChart }) => initDashboardChart());
     }

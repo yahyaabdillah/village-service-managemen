@@ -793,3 +793,26 @@ details.import-details > summary .badge a { color: inherit; }
 details.import-details[open] { padding-bottom: 1.25rem; }
 details.import-details[open] > summary { padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
 .page-head .back-link { margin-bottom: .4rem; }
+
+/* Tabs & dialog forms (service configuration) */
+.tab-list { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: 1rem; padding: .3rem; border: 1px solid var(--rule); border-radius: var(--radius-md); background: #fff; }
+.tab { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem .85rem; border-radius: var(--radius-sm); color: var(--muted); font-size: .88rem; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.tab:hover { color: var(--forest-900); background: var(--sage-50); }
+.tab.active { color: #fff; background: var(--forest-700); }
+.tab svg { width: 1rem; height: 1rem; }
+.tab-count { min-width: 1.35rem; padding: .05rem .4rem; border-radius: 999px; background: rgba(0,0,0,.08); font-size: .72rem; text-align: center; font-variant-numeric: tabular-nums; }
+.tab.active .tab-count { background: rgba(255,255,255,.2); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.table-toolbar { align-items: flex-start; padding: 1rem 1.1rem; }
+.table-toolbar p { margin: .15rem 0 0; font-size: .85rem; max-width: 60ch; }
+.form-dialog { width: min(40rem, calc(100% - 2rem)); padding: 0; border: 0; border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-md); }
+.form-dialog::backdrop { background: rgba(11,42,36,.5); }
+.form-dialog .dialog-card { padding: 1.25rem 1.5rem 1.5rem; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.dialog-head h2 { margin: 0; font-family: var(--font-body); font-size: 1.1rem; letter-spacing: 0; }
+.dialog-grid { gap: .75rem 1rem; }
+.dialog-grid .field-help { min-height: 0; }
+.field-label { display: block; margin-bottom: .3rem; font-size: .85rem; font-weight: 700; }
+.check-group { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+.check-group .check-row { margin-top: .25rem; }
