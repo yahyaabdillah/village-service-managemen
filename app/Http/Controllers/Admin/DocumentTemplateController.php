@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DocumentTemplate;
+use App\Models\ServiceRequest;
 use App\Models\ServiceType;
 use App\Models\ServiceTypeField;
 use App\Models\TemplateField;
+use App\Services\DocumentGenerationService;
 use App\Services\DocumentMappingResolver;
 use App\Services\DocumentVariableRegistry;
 use App\Services\MalwareScanner;
@@ -20,18 +22,33 @@ use setasign\Fpdi\Fpdi;
 
 class DocumentTemplateController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $query = DocumentTemplate::with('serviceType')->withCount('fields')
+            ->orderByDesc('is_default')->orderByDesc('is_active')->latest('updated_at');
+
+        if ($request->filled('service_type_id')) {
+            $query->where('service_type_id', $request->integer('service_type_id'));
+        }
+        if ($search = trim($request->string('q')->toString())) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+
         return view('admin.document-templates.index', [
-            'templates' => DocumentTemplate::with('serviceType')->latest()->paginate(20),
+            'templates' => $query->paginate(20)->withQueryString(),
+            'serviceTypes' => ServiceType::orderBy('name')->get(),
+            'servicesWithoutLive' => ServiceType::where('is_active', true)
+                ->whereDoesntHave('templates', fn ($q) => $q->where('is_active', true)->where('is_default', true)->where('status', 'active'))
+                ->orderBy('name')->get(),
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         return view('admin.document-templates.form', [
             'template' => new DocumentTemplate,
             'serviceTypes' => ServiceType::where('is_active', true)->orderBy('name')->get(),
+            'selectedServiceId' => (int) old('service_type_id', $request->integer('service_type_id')),
         ]);
     }
 
@@ -40,7 +57,7 @@ class DocumentTemplateController extends Controller
         $data = $request->validate([
             'service_type_id' => ['required', 'exists:service_types,id'],
             'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:1000'],
             'template' => ['required', 'file', 'max:5120', 'mimes:pdf'],
         ]);
 
@@ -52,7 +69,7 @@ class DocumentTemplateController extends Controller
             $pageCount = (new Fpdi)->setSourceFile(Storage::disk('private')->path($path));
         } catch (\Throwable) {
             Storage::disk('private')->delete($path);
-            throw ValidationException::withMessages(['template' => 'File tidak dapat dibaca sebagai PDF yang valid.']);
+            throw ValidationException::withMessages(['template' => 'File tidak dapat dibaca sebagai PDF. Simpan ulang dokumen sebagai PDF biasa (bukan terenkripsi) lalu unggah lagi.']);
         }
 
         $version = DocumentTemplate::where('service_type_id', $data['service_type_id'])->max('version') + 1;
@@ -70,7 +87,8 @@ class DocumentTemplateController extends Controller
             'is_default' => false,
         ]);
 
-        return redirect()->route('admin.document-templates.builder', $template)->with('status', 'Template berhasil dibuat.');
+        return redirect()->route('admin.document-templates.builder', $template)
+            ->with('status', 'PDF tersimpan. Sekarang tempatkan data yang ingin dicetak di atas halaman, lalu aktifkan template.');
     }
 
     public function builder(DocumentTemplate $documentTemplate, DocumentVariableRegistry $registry)
@@ -80,8 +98,47 @@ class DocumentTemplateController extends Controller
         return view('admin.document-templates.builder', [
             'template' => $documentTemplate,
             'variables' => $registry->for($documentTemplate->serviceType),
-            'dateFormats' => DocumentMappingResolver::DATE_FORMATS,
+            'dateFormats' => self::dateFormatLabels(),
+            'dateKeys' => DocumentVariableRegistry::DATE_KEYS,
         ]);
+    }
+
+    public function update(Request $request, DocumentTemplate $documentTemplate)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'make_default' => ['nullable', 'boolean'],
+        ]);
+
+        DB::transaction(function () use ($data, $documentTemplate) {
+            $documentTemplate->update(['name' => $data['name'], 'description' => $data['description'] ?? null]);
+
+            if (! empty($data['make_default'])) {
+                if (! $documentTemplate->is_active || $documentTemplate->status !== 'active') {
+                    throw ValidationException::withMessages(['make_default' => 'Aktifkan template ini terlebih dahulu sebelum menjadikannya template yang dipakai.']);
+                }
+                DocumentTemplate::where('service_type_id', $documentTemplate->service_type_id)
+                    ->whereKeyNot($documentTemplate->id)->update(['is_default' => false]);
+                $documentTemplate->update(['is_default' => true]);
+            }
+        });
+
+        return back()->with('status', 'Pengaturan template disimpan.');
+    }
+
+    public function destroy(DocumentTemplate $documentTemplate)
+    {
+        $serviceTypeId = $documentTemplate->service_type_id;
+        $name = $documentTemplate->name;
+
+        DB::transaction(function () use ($documentTemplate) {
+            $documentTemplate->update(['is_active' => false, 'is_default' => false, 'status' => 'archived']);
+            $documentTemplate->delete();
+        });
+
+        return redirect()->route('admin.service-types.edit', [$serviceTypeId, 'tab' => 'template'])
+            ->with('status', "Template “{$name}” dihapus. Surat yang sudah diterbitkan tetap tersimpan.");
     }
 
     public function preview(DocumentTemplate $documentTemplate)
@@ -99,6 +156,37 @@ class DocumentTemplateController extends Controller
         );
     }
 
+    /**
+     * The template filled with example data, so the clerk can check positions before
+     * a real request exists. Nothing is stored.
+     */
+    public function sample(DocumentTemplate $documentTemplate, DocumentGenerationService $generator, DocumentVariableRegistry $registry)
+    {
+        $documentTemplate->load('fields', 'serviceType');
+        $now = now();
+        $samples = $registry->samples($documentTemplate->serviceType) + [
+            '__raw_letter_date' => $now->toIso8601String(),
+            '__raw_submitted_date' => $now->copy()->subDays(2)->toIso8601String(),
+            '__raw_completed_date' => $now->toIso8601String(),
+        ];
+        $samples['letter_date'] = $now->locale('id')->translatedFormat('d F Y');
+        $samples['place_date'] = str_replace(['Desa ', 'desa '], '', (string) ($samples['village_name'] ?? 'Ngringo')).', '.$samples['letter_date'];
+
+        $request = new ServiceRequest(['service_type_id' => $documentTemplate->service_type_id, 'request_code' => 'CONTOH']);
+
+        try {
+            $content = $generator->render($request, $documentTemplate, $samples);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['template' => $exception->getMessage()]);
+        }
+
+        return response($content, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="contoh-'.Str::slug($documentTemplate->name).'.pdf"',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
     public function storeField(Request $request, DocumentTemplate $documentTemplate)
     {
         $data = $this->validateField($request, $documentTemplate);
@@ -106,10 +194,10 @@ class DocumentTemplateController extends Controller
         $field = $documentTemplate->fields()->create($data);
 
         if ($request->expectsJson()) {
-            return response()->json(['message' => 'Field berhasil ditambahkan.', 'field' => $field], 201);
+            return response()->json(['message' => 'Teks ditambahkan.', 'field' => $field], 201);
         }
 
-        return back()->with('status', 'Field template berhasil ditambahkan.');
+        return back()->with('status', 'Teks ditambahkan ke template.');
     }
 
     public function updateField(Request $request, DocumentTemplate $documentTemplate, TemplateField $templateField)
@@ -119,10 +207,10 @@ class DocumentTemplateController extends Controller
         $templateField->update($data);
 
         if ($request->expectsJson()) {
-            return response()->json(['message' => 'Field diperbarui.', 'field' => $templateField->fresh()]);
+            return response()->json(['message' => 'Tersimpan.', 'field' => $templateField->fresh()]);
         }
 
-        return back()->with('status', 'Field diperbarui.');
+        return back()->with('status', 'Teks diperbarui.');
     }
 
     public function destroyField(DocumentTemplate $documentTemplate, TemplateField $templateField)
@@ -134,14 +222,18 @@ class DocumentTemplateController extends Controller
             return response()->json(status: 204);
         }
 
-        return back()->with('status', 'Field dihapus.');
+        return back()->with('status', 'Teks dihapus dari template.');
     }
 
+    /**
+     * A new question for the citizen form, created from inside the builder so its
+     * answer can be printed. It appears on the public form right away.
+     */
     public function storeVariable(Request $request, DocumentTemplate $documentTemplate)
     {
         $data = $request->validate([
             'label' => ['required', 'string', 'max:255'],
-            'field_key' => ['required', 'string', 'max:100', 'regex:/^[a-z][a-z0-9_]*$/', Rule::unique('service_type_fields')->where('service_type_id', $documentTemplate->service_type_id)],
+            'field_key' => ['nullable', 'string', 'max:100', 'regex:/^[a-z][a-z0-9_]*$/'],
             'field_type' => ['required', Rule::in(['text', 'textarea', 'number', 'date', 'email', 'select'])],
             'is_required' => ['nullable', 'boolean'],
             'options' => ['nullable', 'array'],
@@ -151,25 +243,41 @@ class DocumentTemplateController extends Controller
         ]);
 
         if ($data['field_type'] === 'select' && empty($data['options'])) {
-            throw ValidationException::withMessages(['options' => 'Pilihan wajib diisi untuk tipe select.']);
+            throw ValidationException::withMessages(['options' => 'Tulis pilihan jawabannya, satu per baris.']);
+        }
+
+        $key = Str::snake(Str::slug(($data['field_key'] ?? null) ?: $data['label'], '_'));
+        if ($key === '' || ! preg_match('/^[a-z][a-z0-9_]*$/', $key)) {
+            throw ValidationException::withMessages(['label' => 'Nama pertanyaan harus mengandung huruf.']);
+        }
+        $taken = ServiceTypeField::where('service_type_id', $documentTemplate->service_type_id)->where('field_key', $key)->exists()
+            || array_key_exists($key, array_flip(app(DocumentVariableRegistry::class)->keys($documentTemplate->serviceType)));
+        if ($taken) {
+            throw ValidationException::withMessages(['label' => "Pertanyaan dengan nama “{$data['label']}” sudah ada pada layanan ini."]);
         }
 
         $field = ServiceTypeField::create([
-            ...$data,
             'service_type_id' => $documentTemplate->service_type_id,
-            'field_key' => Str::snake($data['field_key']),
-            'is_active' => false,
+            'label' => $data['label'],
+            'field_key' => $key,
+            'field_type' => $data['field_type'],
+            'options' => $data['options'] ?? null,
+            'is_required' => (bool) ($data['is_required'] ?? false),
+            'is_active' => true,
+            'placeholder' => $data['placeholder'] ?? null,
+            'help_text' => $data['help_text'] ?? null,
             'sort_order' => ServiceTypeField::where('service_type_id', $documentTemplate->service_type_id)->max('sort_order') + 1,
         ]);
 
         return response()->json([
-            'message' => 'Variable form dibuat sebagai draft.',
+            'message' => "Pertanyaan “{$field->label}” ditambahkan ke formulir warga.",
             'variable' => [
                 'key' => $field->field_key,
                 'label' => $field->label,
-                'group' => 'Form Layanan',
+                'group' => 'Isian formulir',
+                'sample' => $field->placeholder ?: 'Contoh '.strtolower($field->label),
                 'source' => 'form',
-                'is_active' => false,
+                'is_active' => true,
             ],
         ], 201);
     }
@@ -178,13 +286,13 @@ class DocumentTemplateController extends Controller
     {
         $documentTemplate->load('fields', 'serviceType');
         if ($documentTemplate->fields->isEmpty()) {
-            return back()->withErrors(['template' => 'Template belum mempunyai field.']);
+            return back()->withErrors(['template' => 'Tempatkan minimal satu teks di atas halaman sebelum mengaktifkan template.']);
         }
 
         foreach ($documentTemplate->fields as $field) {
             $this->assertMappingVariables($documentTemplate, $field->mapping_config, $field->variable_key, $registry);
             if ($field->page_number > $documentTemplate->page_count || $field->x_position + $field->width > 100 || $field->y_position + $field->height > 100) {
-                return back()->withErrors(['template' => "Field '{$field->label}' berada di luar halaman."]);
+                return back()->withErrors(['template' => "Teks “{$field->label}” berada di luar halaman. Geser ke dalam halaman lalu coba lagi."]);
             }
         }
 
@@ -208,7 +316,17 @@ class DocumentTemplateController extends Controller
             ]);
         });
 
-        return back()->with('status', 'Template tervalidasi dan diaktifkan sebagai default.');
+        return back()->with('status', 'Template aktif dan dipakai untuk menerbitkan '.$documentTemplate->serviceType->name.'.');
+    }
+
+    /** @return array<string, string> format => example */
+    public static function dateFormatLabels(): array
+    {
+        $now = now()->locale('id');
+
+        return collect(DocumentMappingResolver::DATE_FORMATS)
+            ->mapWithKeys(fn (string $format) => [$format => $now->translatedFormat($format)])
+            ->all();
     }
 
     private function validateField(Request $request, DocumentTemplate $documentTemplate): array
@@ -235,26 +353,16 @@ class DocumentTemplateController extends Controller
             'width' => ['required', 'numeric', 'between:1,100'],
             'height' => ['required', 'numeric', 'between:1,100'],
             'font_size' => ['required', 'numeric', 'between:6,72'],
+            'font_weight' => ['nullable', Rule::in(['normal', 'bold'])],
             'text_align' => ['required', 'in:left,center,right'],
             'text_color' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ]);
 
         if ($data['x_position'] + $data['width'] > 100 || $data['y_position'] + $data['height'] > 100) {
-            throw ValidationException::withMessages(['position' => 'Posisi dan ukuran field harus berada di dalam halaman.']);
+            throw ValidationException::withMessages(['position' => 'Teks harus berada di dalam halaman.']);
         }
 
-        $mapping = $data['mapping_config'] ?? null;
-        if (($mapping['mode'] ?? null) === 'literal' && trim((string) ($mapping['value'] ?? '')) === '') {
-            throw ValidationException::withMessages(['mapping_config.value' => 'Teks tetap tidak boleh kosong.']);
-        }
-        if (($mapping['mode'] ?? null) === 'segments' && empty($mapping['segments'])) {
-            throw ValidationException::withMessages(['mapping_config.segments' => 'Mapping gabungan harus mempunyai minimal satu segmen.']);
-        }
-        if (! empty($mapping['date_format']) && ! in_array($mapping['key'] ?? '', ['letter_date', 'submitted_date', 'completed_date'], true)) {
-            throw ValidationException::withMessages(['mapping_config.date_format' => 'Format tanggal hanya dapat dipakai pada variable tanggal.']);
-        }
-
-        $this->assertMappingVariables($documentTemplate, $mapping, $data['variable_key'], app(DocumentVariableRegistry::class));
+        $this->assertMappingVariables($documentTemplate, $data['mapping_config'] ?? null, $data['variable_key'], app(DocumentVariableRegistry::class));
 
         return $data;
     }
@@ -265,18 +373,18 @@ class DocumentTemplateController extends Controller
             throw ValidationException::withMessages(['mapping_config' => 'Teks tetap tidak boleh kosong.']);
         }
         if (($mapping['mode'] ?? null) === 'segments' && empty($mapping['segments'])) {
-            throw ValidationException::withMessages(['mapping_config' => 'Mapping gabungan harus mempunyai minimal satu segmen.']);
+            throw ValidationException::withMessages(['mapping_config' => 'Gabungan harus mempunyai minimal satu bagian.']);
         }
-        if (! empty($mapping['date_format']) && ! in_array($mapping['key'] ?? '', ['letter_date', 'submitted_date', 'completed_date'], true)) {
-            throw ValidationException::withMessages(['mapping_config' => 'Format tanggal hanya dapat dipakai pada variable tanggal.']);
+        if (! empty($mapping['date_format']) && ! in_array($registry->normalize((string) ($mapping['key'] ?? '')), DocumentVariableRegistry::DATE_KEYS, true)) {
+            throw ValidationException::withMessages(['mapping_config' => 'Format tanggal hanya berlaku untuk data berupa tanggal.']);
         }
 
-        $allowed = $registry->keys($template->serviceType);
+        $allowed = array_map([$registry, 'normalize'], $registry->keys($template->serviceType));
         $keys = $this->mappingKeys($mapping, $legacyKey);
 
         foreach ($keys as $key) {
-            if (! in_array($registry->normalize((string) $key), array_map([$registry, 'normalize'], $allowed), true)) {
-                throw ValidationException::withMessages(['mapping_config' => "Variable '{$key}' tidak tersedia untuk layanan ini."]);
+            if (! in_array($registry->normalize((string) $key), $allowed, true)) {
+                throw ValidationException::withMessages(['mapping_config' => "Data “{$key}” tidak tersedia untuk layanan ini."]);
             }
         }
     }

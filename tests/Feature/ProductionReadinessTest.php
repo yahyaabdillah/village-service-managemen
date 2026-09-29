@@ -273,20 +273,89 @@ class ProductionReadinessTest extends TestCase
             ->assertHeader('content-disposition', 'attachment; filename="'.$request->request_code.'.png"');
     }
 
-    public function test_builder_can_create_draft_variable_without_exposing_it_publicly(): void
+    public function test_builder_creates_a_form_question_that_citizens_see_right_away(): void
     {
         $this->seed();
         $admin = User::where('email', 'admin@desa.test')->firstOrFail();
         $template = DocumentTemplate::firstOrFail();
 
         $this->actingAs($admin)->postJson(route('admin.document-templates.variables.store', $template), [
-            'label' => 'Tujuan Surat', 'field_key' => 'tujuan_surat', 'field_type' => 'text', 'is_required' => true,
-        ])->assertCreated()->assertJsonPath('variable.key', 'tujuan_surat');
+            'label' => 'Tujuan Surat', 'field_type' => 'text', 'is_required' => true,
+        ])->assertCreated()->assertJsonPath('variable.key', 'tujuan_surat')->assertJsonPath('variable.is_active', true);
 
         $this->assertDatabaseHas('service_type_fields', [
-            'service_type_id' => $template->service_type_id, 'field_key' => 'tujuan_surat', 'is_active' => false,
+            'service_type_id' => $template->service_type_id, 'field_key' => 'tujuan_surat', 'is_active' => true, 'is_required' => true,
         ]);
-        $this->get(route('requests.create', $template->serviceType))->assertDontSee('name="fields[tujuan_surat]"', false);
+        $this->get(route('requests.create', $template->serviceType))->assertSee('name="fields[tujuan_surat]"', false);
+
+        // The same question twice is refused with a message on the label, not a 500.
+        $this->actingAs($admin)->postJson(route('admin.document-templates.variables.store', $template), [
+            'label' => 'Tujuan surat', 'field_type' => 'text',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['label']);
+    }
+
+    public function test_template_sample_rename_default_switch_and_delete(): void
+    {
+        Storage::fake('private');
+        $this->seed();
+        $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+        $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
+        $live = DocumentTemplate::where('service_type_id', $service->id)->where('is_default', true)->firstOrFail();
+
+        // Sample PDF renders from example data without touching the database.
+        $this->actingAs($admin)->get(route('admin.document-templates.sample', $live))
+            ->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertDatabaseCount('generated_documents', 0);
+
+        // A second template for the same service, activated, takes over as the one in use.
+        $second = DocumentTemplate::create([
+            'service_type_id' => $service->id, 'name' => 'Kop baru', 'template_file_path' => $live->template_file_path,
+            'original_file_name' => 'kop-baru.pdf', 'page_count' => 1, 'is_active' => false, 'status' => 'draft', 'version' => 2, 'is_default' => false,
+        ]);
+        $this->actingAs($admin)->patch(route('admin.document-templates.activate', $second))->assertSessionHasErrors('template');
+        $second->fields()->create(['label' => 'Nama', 'variable_key' => 'applicant_name', 'page_number' => 1, 'x_position' => 10, 'y_position' => 10, 'width' => 40, 'height' => 4, 'font_size' => 11, 'text_align' => 'left', 'text_color' => '#000000']);
+        $this->actingAs($admin)->patch(route('admin.document-templates.activate', $second))->assertSessionHasNoErrors();
+        $this->assertTrue($second->fresh()->isLive());
+        $this->assertFalse($live->fresh()->is_default);
+
+        // Rename, then hand the "in use" flag back to the first template.
+        $this->actingAs($admin)->patch(route('admin.document-templates.update', $second), ['name' => 'Kop baru 2026', 'description' => 'uji'])->assertSessionHasNoErrors();
+        $this->assertSame('Kop baru 2026', $second->fresh()->name);
+        $this->actingAs($admin)->patch(route('admin.document-templates.update', $live), ['name' => $live->name, 'make_default' => 1])->assertSessionHasNoErrors();
+        $this->assertTrue($live->fresh()->isLive());
+        $this->assertFalse($second->fresh()->is_default);
+
+        // Deleting hides the template from the builder and from publishing.
+        $this->actingAs($admin)->delete(route('admin.document-templates.destroy', $second))
+            ->assertRedirect(route('admin.service-types.edit', [$service->id, 'tab' => 'template']));
+        $this->assertSoftDeleted('document_templates', ['id' => $second->id]);
+        $this->actingAs($admin)->get(route('admin.document-templates.builder', $second))->assertNotFound();
+        $this->actingAs($admin)->get(route('admin.document-templates.index'))->assertOk()->assertDontSee('Kop baru 2026');
+    }
+
+    public function test_generated_pdf_keeps_font_line_height_and_transliterates_non_latin_text(): void
+    {
+        Storage::fake('private');
+        $this->seed();
+        $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+        $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
+        $template = DocumentTemplate::where('service_type_id', $service->id)->where('is_default', true)->firstOrFail();
+        $request = ServiceRequest::factory()->create([
+            'service_type_id' => $service->id, 'status' => 'verified', 'nik' => '3201010101010001',
+            'applicant_name' => 'Zoë “Nur” Ångström – Sri',
+        ]);
+
+        $this->actingAs($admin)->patch(route('admin.service-requests.publish', $request), ['letter_number' => '470/002/DS/2026'])->assertSessionHasNoErrors();
+
+        $pdf = Storage::disk('private')->get($request->fresh()->generatedDocuments()->firstOrFail()->file_path);
+        $this->assertStringStartsWith('%PDF', $pdf);
+
+        // Inflate the page streams: the name must be there in Latin-1 (Zoë keeps its ë,
+        // the curly quotes and en dash become plain ASCII) rather than as UTF-8 mojibake.
+        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+        $text = implode('', array_map(fn ($raw) => @gzuncompress($raw) ?: $raw, $streams[1]));
+        $this->assertStringContainsString("Zo\xEB \"Nur\" \xC5ngstr\xF6m - Sri", $text);
+        $this->assertStringNotContainsString("\xC3\xAB", $text);
     }
 
     public function test_admin_request_index_is_a_filterable_table_with_actions(): void

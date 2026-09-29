@@ -37,7 +37,7 @@ class DocumentMappingResolver
         }
 
         if (($segment['type'] ?? null) !== 'source') {
-            throw new RuntimeException('Segmen mapping dokumen tidak valid.');
+            throw new RuntimeException('Bagian gabungan pada template tidak valid.');
         }
 
         return $this->source(
@@ -52,7 +52,7 @@ class DocumentMappingResolver
     {
         $key = $this->registry->normalize($key);
         if (! array_key_exists($key, $variables)) {
-            throw new RuntimeException("Variable dokumen '{$key}' tidak tersedia.");
+            throw new RuntimeException("Template memakai data “{$key}” yang tidak ada pada layanan ini. Buka template dan ganti atau hapus teks tersebut.");
         }
 
         $value = $variables[$key];
@@ -62,7 +62,7 @@ class DocumentMappingResolver
 
         if ($dateFormat) {
             if (! in_array($dateFormat, self::DATE_FORMATS, true)) {
-                throw new RuntimeException('Format tanggal dokumen tidak diizinkan.');
+                throw new RuntimeException('Bentuk tanggal pada template tidak dikenali.');
             }
             $value = Carbon::parse($variables['__raw_'.$key] ?? $value)->locale('id')->translatedFormat($dateFormat);
         }

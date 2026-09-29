@@ -11,6 +11,8 @@ import {
     Type, UserCog, UserRound, Users, UsersRound, ZoomIn, ZoomOut, Braces,
     Plus, X, RefreshCw, LayoutTemplate, Download, File, FileCheck2,
     Eye, FileText, Image as ImageIcon, QrCode, Unlink,
+    AlertTriangle, Bold, Check, CheckCheck, FileWarning, FileX, Info, Loader, LogIn,
+    MessageSquareText, PenLine, SearchX, Settings2, Upload, XCircle,
 } from 'lucide';
 
 const interfaceIcons = {
@@ -27,6 +29,8 @@ const interfaceIcons = {
     Plus, X, RefreshCw, LayoutTemplate, Download, File, FileCheck2,
     Eye, FileText, Image: ImageIcon, QrCode, Unlink,
     Grid2x2Check: Grid2X2Check,
+    AlertTriangle, TriangleAlert: AlertTriangle, Bold, Check, CheckCheck, FileWarning, FileX, Info, Loader, LogIn,
+    MessageSquareText, PenLine, SearchX, Settings2, Upload, XCircle,
 };
 
 function initNavigation() {
@@ -166,11 +170,24 @@ function initConfirmDialogs() {
         dialog.showModal();
     });
 
+    let resolver = null;
+    // Same dialog for script-driven actions: `await window.appConfirm({title, text, label})`.
+    window.appConfirm = ({ title: heading, text: body, label, tone } = {}) => new Promise((resolve) => {
+        title.textContent = heading || 'Lanjutkan tindakan ini?';
+        text.textContent = body || 'Tindakan ini tidak dapat dibatalkan.';
+        accept.textContent = label || 'Ya, lanjutkan';
+        accept.className = 'btn ' + (tone ?? 'danger');
+        resolver = resolve;
+        dialog.showModal();
+    });
+
     dialog.addEventListener('close', () => {
-        if (dialog.returnValue === 'confirm' && pending) {
+        const confirmed = dialog.returnValue === 'confirm';
+        if (confirmed && pending) {
             pending.dataset.confirmed = 'true';
             pending.requestSubmit();
         }
+        if (resolver) { resolver(confirmed); resolver = null; }
         pending = null;
         dialog.returnValue = '';
     });
@@ -496,6 +513,8 @@ function initPermissionPickers() {
 
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons: interfaceIcons });
+    // Screens that add markup later (the template builder's palette) re-run icon replacement.
+    window.refreshIcons = () => createIcons({ icons: interfaceIcons });
     initNavigation();
     initPhoneInputs();
     initSteppers();
