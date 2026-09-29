@@ -45,9 +45,9 @@ class ProductionReadinessTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin')
             ->assertOk()
-            ->assertSee('Dashboard Layanan Desa')
-            ->assertSee('Total Penduduk')
-            ->assertSee('Pengajuan Baru');
+            ->assertSee('Selamat datang')
+            ->assertSee('Penduduk terdaftar')
+            ->assertSee('Menunggu verifikasi');
     }
 
     public function test_login_and_logout_flow_works(): void

@@ -916,3 +916,40 @@ details.import-details[open] > summary { padding-bottom: 1rem; border-bottom: 1p
 @media (max-width: 1100px) {
     .inspector-close { display: inline-flex; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Dashboard & WhatsApp                                                 */
+/* ------------------------------------------------------------------ */
+.metric-link { display: block; color: inherit; text-decoration: none; transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.metric-link:hover { border-color: var(--metric-color, var(--forest-700)); transform: translateY(-1px); }
+a.status-row { color: inherit; text-decoration: none; border-radius: var(--radius-xs); }
+a.status-row:hover small:first-child { color: var(--forest-700); text-decoration: underline; text-underline-offset: .2em; }
+.top-services { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.top-services ol { margin: 0; padding: 0; list-style: none; display: grid; gap: .4rem; }
+.top-services li { display: flex; justify-content: space-between; gap: .75rem; font-size: .85rem; }
+.top-services strong { font-variant-numeric: tabular-nums; }
+.wa-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(18rem, .8fr); gap: 1rem; align-items: start; }
+.wa-card, .wa-qr-card { margin: 0; }
+.wa-state { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+.wa-state-icon { flex: 0 0 auto; width: 3rem; height: 3rem; display: grid; place-items: center; border-radius: var(--radius-md); background: var(--tone-neutral-bg); color: var(--tone-neutral-ink); }
+.wa-state-icon svg { width: 1.4rem; height: 1.4rem; }
+.wa-state-icon.success { background: var(--tone-success-bg); color: var(--tone-success-ink); }
+.wa-state-icon.warning { background: var(--tone-warning-bg); color: var(--tone-warning-ink); }
+.wa-state-icon.danger { background: var(--tone-danger-bg); color: var(--tone-danger-ink); }
+.wa-state-title { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0 0 .25rem; font-family: var(--font-body); font-size: 1.25rem; letter-spacing: 0; }
+.wa-state p { margin: 0; }
+.wa-actions { margin: 1rem 0; }
+.wa-actions form { margin: 0; }
+.wa-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1rem; margin: 0; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.wa-facts dt { color: var(--muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.wa-facts dd { margin: .15rem 0 0; font-size: .88rem; overflow-wrap: anywhere; }
+.wa-qr { display: block; width: min(18rem, 100%); height: auto; margin: 0 auto .9rem; border: 1px solid var(--rule); border-radius: var(--radius-sm); }
+.wa-steps { margin: 0; padding-left: 1.2rem; display: grid; gap: .3rem; font-size: .85rem; }
+.wa-qr-empty { display: grid; place-items: center; gap: .35rem; min-height: 14rem; padding: 1rem; text-align: center; color: var(--muted); }
+.wa-qr-empty svg { width: 2rem; height: 2rem; color: var(--forest-700); }
+.wa-qr-empty strong { color: var(--ink); }
+.wa-qr-empty p { margin: 0; max-width: 24ch; font-size: .85rem; }
+.spinner { width: 1.6rem; height: 1.6rem; border: 3px solid var(--sage-100); border-top-color: var(--forest-700); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+@media (max-width: 900px) { .wa-grid { grid-template-columns: 1fr; } .wa-facts { grid-template-columns: 1fr; } }

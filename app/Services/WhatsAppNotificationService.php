@@ -393,17 +393,32 @@ class WhatsAppNotificationService
         return is_int($port) || ctype_digit((string) $port) ? (int) $port : 3100;
     }
 
+    private bool $bridgeStatusFetched = false;
+
+    private ?array $bridgeStatus = null;
+
+    /**
+     * One request per page load: status() and isBridgeRunning() both need it, and when
+     * the bridge is down each attempt would otherwise wait for its own timeout.
+     */
     private function fetchBridgeStatus(): ?array
     {
+        if ($this->bridgeStatusFetched) {
+            return $this->bridgeStatus;
+        }
+        $this->bridgeStatusFetched = true;
+
         try {
-            $response = Http::timeout(2)
+            $response = Http::connectTimeout(1)->timeout(2)
                 ->withToken((string) config('whatsapp.bridge_token'))
                 ->get(config('whatsapp.bridge_url').'/status');
 
-            return $response->successful() ? ($response->json() ?: []) : null;
+            $this->bridgeStatus = $response->successful() ? ($response->json() ?: []) : null;
         } catch (\Throwable) {
-            return null;
+            $this->bridgeStatus = null;
         }
+
+        return $this->bridgeStatus;
     }
 
     private function fetchBridgeQr(): ?array
@@ -415,7 +430,7 @@ class WhatsAppNotificationService
         $this->bridgeQrFetched = true;
 
         try {
-            $response = Http::timeout(2)
+            $response = Http::connectTimeout(1)->timeout(2)
                 ->withToken((string) config('whatsapp.bridge_token'))
                 ->get(config('whatsapp.bridge_url').'/qr');
 

@@ -16,37 +16,31 @@ class DashboardController extends Controller
         $startDate = now()->startOfDay()->subDays(6);
         $requestsInPeriod = ServiceRequest::query()
             ->where('created_at', '>=', $startDate)
-            ->get(['created_at', 'status', 'service_type_id']);
-        $trendLabels = collect(range(0, 6))
-            ->map(fn (int $offset) => $startDate->copy()->addDays($offset));
+            ->get(['created_at']);
+        $trendDays = collect(range(0, 6))->map(fn (int $offset) => $startDate->copy()->addDays($offset));
         $statusBreakdown = ServiceRequest::query()
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
-        $serviceBreakdown = ServiceType::query()
-            ->withCount('requests')
-            ->orderByDesc('requests_count')
-            ->take(5)
-            ->get();
 
         return view('admin.dashboard', [
             'totalResidents' => Resident::count(),
             'totalRequests' => ServiceRequest::count(),
-            'newRequests' => ServiceRequest::where('status', 'submitted')->count(),
-            'processingRequests' => ServiceRequest::whereIn('status', ['verified', 'processing'])->count(),
-            'completedRequests' => ServiceRequest::where('status', 'completed')->count(),
-            'rejectedRequests' => ServiceRequest::where('status', 'rejected')->count(),
-            'serviceTypes' => ServiceType::count(),
-            'generatedDocuments' => GeneratedDocument::count(),
+            'newRequests' => (int) ($statusBreakdown['submitted'] ?? 0),
+            'processingRequests' => (int) ($statusBreakdown['verified'] ?? 0) + (int) ($statusBreakdown['processing'] ?? 0),
+            'completedRequests' => (int) ($statusBreakdown['completed'] ?? 0),
+            'completedThisMonth' => ServiceRequest::where('status', 'completed')->where('completed_at', '>=', now()->startOfMonth())->count(),
+            'oldestWaitingDays' => ($oldest = ServiceRequest::where('status', 'submitted')->min('created_at')) ? (int) floor(Carbon::parse($oldest)->diffInDays(now())) : null,
+            'activeServices' => ServiceType::where('is_active', true)->count(),
+            'generatedDocuments' => GeneratedDocument::where('is_active', true)->count(),
             'latestRequests' => ServiceRequest::with('serviceType')->latest()->take(8)->get(),
-            'trendLabels' => $trendLabels->map(fn (Carbon $date) => $date->translatedFormat('D'))->values(),
-            'trendData' => $trendLabels->map(
-                fn (Carbon $date) => $requestsInPeriod->filter(
-                    fn (ServiceRequest $request) => $request->created_at->isSameDay($date)
-                )->count()
+            'topServices' => ServiceType::withCount('requests')->orderByDesc('requests_count')->take(4)->get(),
+            'trendLabels' => $trendDays->map(fn (Carbon $date) => $date->translatedFormat('D'))->values(),
+            'trendData' => $trendDays->map(
+                fn (Carbon $date) => $requestsInPeriod->filter(fn (ServiceRequest $request) => $request->created_at->isSameDay($date))->count()
             )->values(),
+            'weekTotal' => $requestsInPeriod->count(),
             'statusBreakdown' => $statusBreakdown,
-            'serviceBreakdown' => $serviceBreakdown,
         ]);
     }
 }
