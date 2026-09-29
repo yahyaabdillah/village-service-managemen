@@ -54,7 +54,7 @@ class ProductionReadinessTest extends TestCase
     {
         $this->seed();
 
-        $this->get('/login')->assertOk()->assertSee('Login Admin');
+        $this->get('/login')->assertOk()->assertSee('Masuk ke panel petugas');
 
         $this->post('/login', [
             'email' => 'admin@desa.test',
@@ -429,7 +429,8 @@ class ProductionReadinessTest extends TestCase
             ->assertSee('data-dropzone', false)
             ->assertSee('Tarik file ke sini atau klik untuk upload')
             ->assertSee('name="requirements['.$service->requirements()->firstOrFail()->id.']"', false)
-            ->assertSee('.mp4', false);
+            ->assertSee('.pdf', false)
+            ->assertDontSee('.mp4', false);
 
         $this->actingAs($admin)->get(route('admin.document-templates.create'))
             ->assertOk()
@@ -440,7 +441,7 @@ class ProductionReadinessTest extends TestCase
             ->assertOk()
             ->assertSee('data-dropzone', false)
             ->assertSee('name="document"', false)
-            ->assertSee('.mp4', false);
+            ->assertDontSee('.mp4', false);
 
         $this->actingAs($admin)->get(route('admin.residents.index'))
             ->assertOk()

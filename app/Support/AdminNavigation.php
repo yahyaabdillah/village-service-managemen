@@ -17,21 +17,23 @@ class AdminNavigation
     {
         return [
             'Pelayanan' => [
-                self::link('manage service requests', 'admin.dashboard', ['admin.dashboard'], 'layout-dashboard', 'Dashboard'),
-                self::link('manage service requests', 'admin.service-requests.index', ['admin.service-requests.*'], 'inbox', 'Pengajuan'),
+                self::link('dashboard.view', 'admin.dashboard', ['admin.dashboard'], 'layout-dashboard', 'Dashboard'),
+                self::link('service-requests.view', 'admin.service-requests.index', ['admin.service-requests.*'], 'inbox', 'Pengajuan'),
             ],
             'Data Desa' => [
-                self::link('manage residents', 'admin.residents.index', ['admin.residents.*'], 'users', 'Penduduk'),
-                self::link('manage family cards', 'admin.family-cards.index', ['admin.family-cards.*'], 'contact-round', 'Kartu Keluarga'),
-                self::link('manage service types', 'admin.service-types.index', ['admin.service-types.*', 'admin.service-requirements.*', 'admin.service-type-fields.*'], 'grid-2x2-check', 'Konfigurasi Layanan'),
-                self::link('manage document templates', 'admin.document-templates.index', ['admin.document-templates.*'], 'file-pen-line', 'Template Dokumen'),
-                self::link('manage announcements', 'admin.announcements.index', ['admin.announcements.*'], 'megaphone', 'Pengumuman'),
+                self::link('residents.view', 'admin.residents.index', ['admin.residents.*'], 'users', 'Penduduk'),
+                self::link('family-cards.view', 'admin.family-cards.index', ['admin.family-cards.*'], 'contact-round', 'Kartu Keluarga'),
+                self::link('service-types.view', 'admin.service-types.index', ['admin.service-types.*', 'admin.service-requirements.*', 'admin.service-type-fields.*'], 'grid-2x2-check', 'Konfigurasi Layanan'),
+                self::link('document-templates.view', 'admin.document-templates.index', ['admin.document-templates.*'], 'file-pen-line', 'Template Dokumen'),
+                self::link('announcements.view', 'admin.announcements.index', ['admin.announcements.*'], 'megaphone', 'Pengumuman'),
+                self::link('village-profile.view', 'admin.village-profiles.index', ['admin.village-profiles.*'], 'landmark', 'Profil Desa'),
             ],
             'Sistem' => [
-                self::link('manage users', 'admin.users.index', ['admin.users.*'], 'user-cog', 'Akses Pengguna'),
-                self::link('manage roles', 'admin.roles.index', ['admin.roles.*'], 'shield-check', 'Role & Izin'),
-                self::link('view activity logs', 'admin.activity-logs.index', ['admin.activity-logs.*'], 'history', 'Jejak Audit'),
-                self::link('manage notifications', 'admin.whatsapp.index', ['admin.whatsapp.*'], 'message-circle-more', 'WhatsApp'),
+                self::link('users.view', 'admin.users.index', ['admin.users.*'], 'user-cog', 'Pengguna'),
+                self::link('roles.view', 'admin.roles.index', ['admin.roles.*'], 'shield-check', 'Role & Izin'),
+                self::link('activity-logs.view', 'admin.activity-logs.index', ['admin.activity-logs.*'], 'history', 'Jejak Audit'),
+                self::link('notification-logs.view', 'admin.notification-logs.index', ['admin.notification-logs.*'], 'bell-ring', 'Riwayat Notifikasi'),
+                self::link('whatsapp.view', 'admin.whatsapp.index', ['admin.whatsapp.*'], 'message-circle-more', 'WhatsApp'),
             ],
         ];
     }

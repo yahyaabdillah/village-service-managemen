@@ -23,15 +23,15 @@ class KtpKkRequirementTest extends TestCase
         ]);
         $this->assertDatabaseHas('service_requirements', [
             'service_type_id' => $service->id,
-            'name' => 'Kartu Keluarga (KK) atau Akta Kelahiran',
+            'name' => 'Kartu Keluarga atau akta kelahiran',
             'is_required' => true,
             'deleted_at' => null,
         ]);
 
         $this->get(route('requests.create', $service))
             ->assertOk()
-            ->assertSee('Kartu Keluarga (KK) atau Akta Kelahiran')
-            ->assertSee('KTP tidak wajib untuk pengajuan KTP pertama.')
-            ->assertDontSee('KTP Pemohon');
+            ->assertSee('Kartu Keluarga atau akta kelahiran')
+            ->assertSee('akta kelahiran dapat menggantikan KTP')
+            ->assertDontSee('KTP pemohon');
     }
 }

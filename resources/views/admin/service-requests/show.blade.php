@@ -131,10 +131,10 @@
                             'name' => 'document',
                             'id' => 'final-document',
                             'label' => 'Pilih dokumen final',
-                            'accept' => '.pdf,.docx,.jpg,.jpeg,.png,.mp4,.mov,.webm',
+                            'accept' => '.pdf,.docx,.jpg,.jpeg,.png',
                             'required' => true,
                             'icon' => 'FILE',
-                            'help' => 'PDF, DOCX, foto, atau video. Maksimal 5 MB.',
+                            'help' => 'PDF, DOCX, atau foto hasil pindaian. Maksimal 5 MB.',
                         ])
                         <button class="btn light full" type="submit">Upload Manual</button>
                     </form>

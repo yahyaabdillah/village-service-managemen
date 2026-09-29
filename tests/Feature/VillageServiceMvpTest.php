@@ -10,11 +10,13 @@ use App\Models\VillageProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\SubmitsCitizenRequests;
 use Tests\TestCase;
 
 class VillageServiceMvpTest extends TestCase
 {
     use RefreshDatabase;
+    use SubmitsCitizenRequests;
 
     public function test_public_home_lists_village_services_and_announcements(): void
     {
@@ -35,22 +37,13 @@ class VillageServiceMvpTest extends TestCase
         $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
         $requirement = $service->requirements()->firstOrFail();
 
-        $response = $this->post('/pengajuan', [
-            'service_type_id' => $service->id,
+        $response = $this->post('/pengajuan', $this->validSubmission($service, [
             'nik' => '3201010101010001',
-            'applicant_name' => 'Yahya Abdillah',
-            'phone' => '081234567890',
-            'address' => 'Jl. Merdeka No. 1',
-            'hamlet' => 'Dusun A',
-            'rt' => '001',
-            'rw' => '002',
-            'fields' => [
-                'keperluan' => 'Keperluan administrasi bank',
-            ],
+            'fields' => ['keperluan' => 'Keperluan administrasi bank'],
             'requirements' => [
                 $requirement->id => UploadedFile::fake()->create('ktp.jpg', 100, 'image/jpeg'),
             ],
-        ]);
+        ]));
 
         $request = ServiceRequest::where('nik', '3201010101010001')->firstOrFail();
 
@@ -62,7 +55,7 @@ class VillageServiceMvpTest extends TestCase
             'field_key' => 'keperluan',
             'value' => 'Keperluan administrasi bank',
         ]);
-        $this->assertDatabaseCount('request_files', 1);
+        $this->assertDatabaseCount('request_files', $service->requirements()->where('is_required', true)->count());
         $this->assertDatabaseHas('service_request_status_histories', [
             'service_request_id' => $request->id,
             'to_status' => 'submitted',
@@ -129,7 +122,7 @@ class VillageServiceMvpTest extends TestCase
         $this->assertDatabaseHas('roles', ['name' => 'Super Admin']);
         $this->assertDatabaseHas('roles', ['name' => 'Admin Desa']);
         $this->assertDatabaseHas('roles', ['name' => 'Petugas']);
-        $this->assertDatabaseHas('permissions', ['name' => 'manage service requests']);
+        $this->assertDatabaseHas('permissions', ['name' => 'service-requests.view']);
         $this->assertSame(1, VillageProfile::count());
         $this->assertGreaterThanOrEqual(5, ServiceType::count());
         $this->assertGreaterThanOrEqual(1, Announcement::count());

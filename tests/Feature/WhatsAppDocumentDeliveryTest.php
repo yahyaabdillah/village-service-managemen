@@ -14,11 +14,13 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\SubmitsCitizenRequests;
 use Tests\TestCase;
 
 class WhatsAppDocumentDeliveryTest extends TestCase
 {
     use RefreshDatabase;
+    use SubmitsCitizenRequests;
 
     protected function setUp(): void
     {
@@ -45,17 +47,15 @@ class WhatsAppDocumentDeliveryTest extends TestCase
         $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
         $requirement = $service->requirements()->firstOrFail();
 
-        $this->post('/pengajuan', [
-            'service_type_id' => $service->id,
+        $this->post('/pengajuan', $this->validSubmission($service, [
             'nik' => '3201010101010099',
             'applicant_name' => 'Warga Uji Coba',
             'phone' => '081234500099',
             'address' => 'Jl. Uji Coba No. 9',
-            'fields' => ['keperluan' => 'Keperluan pengujian'],
             'requirements' => [
                 $requirement->id => UploadedFile::fake()->create('ktp.jpg', 100, 'image/jpeg'),
             ],
-        ])->assertRedirect();
+        ]))->assertRedirect();
 
         $serviceRequest = ServiceRequest::where('nik', '3201010101010099')->firstOrFail();
 

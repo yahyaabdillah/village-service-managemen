@@ -88,7 +88,7 @@ class ServiceRequestController extends Controller
 
     public function uploadManualDocument(Request $request, ServiceRequest $serviceRequest, MalwareScanner $scanner)
     {
-        $data = $request->validate(['document' => ['required', 'file', 'max:5120', 'mimes:pdf,docx,jpg,jpeg,png,mp4,mov,webm']]);
+        $data = $request->validate(['document' => ['required', 'file', 'max:5120', 'mimes:pdf,docx,jpg,jpeg,png']]);
         $file = $data['document'];
         $scanner->assertClean($file);
         $path = $file->store('generated-documents/'.$serviceRequest->request_code, 'private');

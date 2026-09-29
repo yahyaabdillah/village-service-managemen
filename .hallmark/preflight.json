@@ -1,0 +1,10 @@
+{
+  "scanned": "2026-09-29",
+  "framework": "Laravel 13 + Blade + vanilla JS + Vite (Tailwind installed, ~unused)",
+  "fonts": { "display": "Fraunces Variable (@fontsource, app.css:1)", "body": "Instrument Sans (app.css:32)" },
+  "palette": "hex tokens in :root (app.css:5-35): forest-950..600, sage-100/50, terracotta, amber, cream, paper, ink, muted, line, danger, success, info",
+  "motion": "motion-cut (no motion library)",
+  "spacing": "ad hoc rem values; no named scale",
+  "preserve": ["font stack", "palette hues", "information architecture", "routes", "app.css (append/in-place only)"],
+  "introduce": ["named spacing/radius tokens", "table + button + form + status-chip system", "8-state controls", "copy discipline", "responsive floor 320/375/414/768"]
+}

@@ -30,7 +30,7 @@ class DocumentDownloadController extends Controller
             abort(403);
         }
 
-        $adminMayDownload = auth()->check() && auth()->user()->can('process service requests');
+        $adminMayDownload = auth()->check() && auth()->user()->can('service-requests.view');
         abort_unless($serviceRequest->status === 'completed' || $adminMayDownload, 404);
 
         $document = $serviceRequest->generatedDocuments()->where('is_active', true)->latest('generated_at')->first()

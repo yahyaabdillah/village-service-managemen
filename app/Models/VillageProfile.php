@@ -13,8 +13,21 @@ class VillageProfile extends Model
 
     protected $guarded = [];
 
+    private static ?string $activeNameCache = null;
+
+    /** The active village's name, for page titles and branding; memoised per request. */
+    public static function activeName(): string
+    {
+        return self::$activeNameCache ??= (static::query()->where('is_active', true)->value('village_name') ?: 'Layanan Desa');
+    }
+
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'is_required' => 'boolean', 'is_published' => 'boolean', 'allowed_file_types' => 'array', 'options' => 'array', 'submitted_at' => 'datetime', 'verified_at' => 'datetime', 'processed_at' => 'datetime', 'completed_at' => 'datetime', 'rejected_at' => 'datetime', 'cancelled_at' => 'datetime', 'published_at' => 'datetime', 'generated_at' => 'datetime'];
+        return ['is_active' => 'boolean'];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => self::$activeNameCache = null);
     }
 }

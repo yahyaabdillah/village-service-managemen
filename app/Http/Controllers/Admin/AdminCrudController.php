@@ -11,12 +11,12 @@ use App\Models\ServiceType;
 use App\Models\ServiceTypeField;
 use App\Models\User;
 use App\Models\VillageProfile;
+use App\Support\PermissionCatalog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class AdminCrudController extends Controller
@@ -39,7 +39,7 @@ class AdminCrudController extends Controller
         $query = $class::query();
         match ($resource) {
             'users' => $query->with('roles'),
-            'roles' => $query->withCount('permissions'),
+            'roles' => $query->withCount(['permissions', 'users']),
             default => $query,
         };
         if ($search = $request->string('q')->toString()) {
@@ -141,7 +141,7 @@ class AdminCrudController extends Controller
             'service-type-fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'is_required'],
             'announcements' => ['title', 'slug', 'is_published', 'published_at'],
             'users' => ['name', 'email', 'role_label', 'is_active'],
-            'roles' => ['name', 'guard_name', 'permissions_count'],
+            'roles' => ['name', 'permissions_count', 'users_count'],
             default => ['id'],
         };
     }
@@ -149,13 +149,17 @@ class AdminCrudController extends Controller
     /** Choices the form needs that cannot be derived from the model itself. */
     private function options(string $resource): array
     {
+        $actor = request()->user();
+
         return match ($resource) {
             'users' => [
-                'roles' => Role::orderBy('name')->pluck('name')->all(),
+                // Only a Super Admin may hand out the Super Admin role, so hide it from others.
+                'roles' => Role::orderBy('name')->pluck('name')
+                    ->reject(fn ($name) => $name === PermissionCatalog::SUPER_ROLE && ! $this->isSuper($actor))
+                    ->values()->all(),
                 // Inline role creation is a role-management action, so it needs that permission.
-                'can_create_roles' => (bool) request()->user()?->can('manage roles'),
+                'can_create_roles' => (bool) $actor?->can('roles.create'),
             ],
-            'roles' => ['permissions' => Permission::orderBy('name')->pluck('name')->all()],
             default => [],
         };
     }
@@ -171,7 +175,7 @@ class AdminCrudController extends Controller
             'service-type-fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'options', 'is_required', 'placeholder', 'help_text', 'sort_order'],
             'announcements' => ['title', 'slug', 'content', 'excerpt', 'published_at', 'is_published'],
             'users' => ['name', 'email', 'password', 'phone', 'is_active', 'roles'],
-            'roles' => ['name', 'guard_name', 'permissions'],
+            'roles' => ['name', 'permissions'],
             default => [],
         };
     }
@@ -187,7 +191,7 @@ class AdminCrudController extends Controller
             'service-type-fields' => ['service_type_id' => ['required', 'exists:service_types,id'], 'label' => ['required'], 'field_key' => ['required'], 'field_type' => ['required'], 'options' => ['nullable'], 'is_required' => ['nullable', 'boolean'], 'placeholder' => ['nullable'], 'help_text' => ['nullable'], 'sort_order' => ['nullable', 'integer']],
             'announcements' => ['title' => ['required'], 'slug' => ['nullable', 'unique:announcements,slug,'.($id ?? 'NULL').',id'], 'content' => ['required'], 'excerpt' => ['nullable'], 'published_at' => ['nullable', 'date'], 'is_published' => ['nullable', 'boolean']],
             'users' => ['name' => ['required'], 'email' => ['required', 'email', 'unique:users,email,'.($id ?? 'NULL').',id'], 'password' => [$id ? 'nullable' : 'required', 'string', 'min:8'], 'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'], 'is_active' => ['nullable', 'boolean'], 'roles' => ['nullable', 'array'], 'roles.*' => ['nullable', 'string', 'max:255', $this->roleAssignable($request)]],
-            'roles' => ['name' => ['required', 'unique:roles,name,'.($id ?? 'NULL').',id'], 'guard_name' => ['nullable'], 'permissions' => ['nullable', 'array'], 'permissions.*' => ['string', 'exists:permissions,name']],
+            'roles' => ['name' => ['required', 'string', 'max:255', 'unique:roles,name,'.($id ?? 'NULL').',id'], 'permissions' => ['nullable', 'array'], 'permissions.*' => ['string', 'exists:permissions,name']],
             default => [],
         };
 
@@ -227,7 +231,7 @@ class AdminCrudController extends Controller
         }
         if ($resource === 'roles') {
             unset($data['permissions']);
-            $data['guard_name'] = $data['guard_name'] ?? 'web';
+            $data['guard_name'] = 'web';
         }
 
         return $data;
@@ -243,17 +247,31 @@ class AdminCrudController extends Controller
         return '+62'.ltrim(preg_replace('/\D+/', '', $phone), '0');
     }
 
+    private function isSuper(?User $user): bool
+    {
+        return (bool) $user?->hasRole(PermissionCatalog::SUPER_ROLE);
+    }
+
     /**
-     * Assigning an existing role only needs `manage users`; naming a role that does not
-     * exist yet creates one, which is a `manage roles` action.
+     * Assigning an existing role only needs `users.update`; naming a role that does not
+     * exist yet creates one, which is a `roles.create` action; and the Super Admin role
+     * may only be granted by someone who already holds it.
      */
     private function roleAssignable(Request $request): \Closure
     {
         return function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
-            if (blank($value) || Role::where('name', $value)->exists()) {
+            if (blank($value)) {
                 return;
             }
-            if (! $request->user()?->can('manage roles')) {
+            if ($value === PermissionCatalog::SUPER_ROLE && ! $this->isSuper($request->user())) {
+                $fail('Hanya Super Admin yang dapat memberikan role Super Admin.');
+
+                return;
+            }
+            if (Role::where('name', $value)->exists()) {
+                return;
+            }
+            if (! $request->user()?->can('roles.create')) {
                 $fail('Role "'.$value.'" belum ada dan Anda tidak berhak membuat role baru.');
             }
         };
@@ -277,7 +295,10 @@ class AdminCrudController extends Controller
                 ->all());
         }
         if ($resource === 'roles' && $item instanceof Role) {
-            $item->syncPermissions($request->input('permissions', []));
+            // Super Admin's matrix is informational: it always holds everything.
+            $item->syncPermissions($item->name === PermissionCatalog::SUPER_ROLE
+                ? PermissionCatalog::all()
+                : $request->input('permissions', []));
         }
     }
 
@@ -292,40 +313,87 @@ class AdminCrudController extends Controller
             return;
         }
 
-        // Editing your own account: the roles you end up with must still let you back in here.
-        if ($resource === 'users' && $action === 'save' && $item->getKey() === $user->getKey()) {
-            $names = $this->submittedRoles($request);
-            $keepsAccess = Role::whereIn('name', $names)->with('permissions')->get()
-                ->flatMap->permissions->pluck('name')
-                ->merge($user->getDirectPermissions()->pluck('name'))
-                ->contains('manage users');
+        if ($resource === 'users' && $item instanceof User) {
+            $this->guardUserChange($request, $user, $item, $action);
+        }
 
-            if (! $keepsAccess) {
+        if ($resource === 'roles' && $item instanceof Role) {
+            $this->guardRoleChange($request, $user, $item, $action);
+        }
+    }
+
+    private function guardUserChange(Request $request, User $actor, User $target, string $action): void
+    {
+        $isSelf = $target->getKey() === $actor->getKey();
+
+        if ($action === 'delete') {
+            if ($isSelf) {
+                throw ValidationException::withMessages(['name' => 'Anda tidak dapat menghapus akun Anda sendiri.']);
+            }
+            if ($this->isSuper($target) && ! $this->isSuper($actor)) {
+                throw ValidationException::withMessages(['name' => 'Akun Super Admin hanya dapat dihapus oleh Super Admin lain.']);
+            }
+
+            return;
+        }
+
+        if ($this->isSuper($target) && ! $this->isSuper($actor)) {
+            throw ValidationException::withMessages(['roles' => 'Akun Super Admin hanya dapat diubah oleh Super Admin.']);
+        }
+
+        // Editing your own account: the roles you end up with must still let you back in here.
+        // A Super Admin bypasses every check, so only non-super accounts can lock themselves out.
+        if ($isSelf && ! $this->isSuper($actor)) {
+            $names = $this->submittedRoles($request);
+            $granted = Role::whereIn('name', $names)->with('permissions')->get()
+                ->flatMap->permissions->pluck('name')
+                ->merge($actor->getDirectPermissions()->pluck('name'));
+
+            $missing = collect(['users.view', 'users.update'])->reject(fn ($p) => $granted->contains($p));
+            if ($missing->isNotEmpty()) {
                 throw ValidationException::withMessages([
                     'roles' => $names->isEmpty()
                         ? 'Anda tidak dapat mengosongkan role akun Anda sendiri.'
-                        : 'Role yang tersisa tidak memberi izin "manage users", sehingga Anda akan kehilangan akses ke halaman ini.',
+                        : 'Role yang tersisa tidak lagi memberi izin mengelola pengguna, sehingga Anda akan kehilangan akses ke halaman ini.',
                 ]);
             }
         }
+    }
 
-        if ($resource !== 'roles' || ! $item instanceof Role || ! $user->hasRole($item->name)) {
+    private function guardRoleChange(Request $request, User $actor, Role $role, string $action): void
+    {
+        if ($role->name === PermissionCatalog::SUPER_ROLE) {
+            if ($action === 'delete') {
+                throw ValidationException::withMessages(['name' => 'Role Super Admin tidak dapat dihapus.']);
+            }
+            if ($request->string('name')->toString() !== PermissionCatalog::SUPER_ROLE) {
+                throw ValidationException::withMessages(['name' => 'Nama role Super Admin tidak dapat diubah.']);
+            }
+            if (! $this->isSuper($actor)) {
+                throw ValidationException::withMessages(['name' => 'Role Super Admin hanya dapat diubah oleh Super Admin.']);
+            }
+
+            return;
+        }
+
+        if ($this->isSuper($actor) || ! $actor->hasRole($role->name)) {
             return;
         }
 
         // Access may also come from another role or a direct permission; only block a real loss.
-        $keptElsewhere = $user->roles->where('name', '!=', $item->name)
+        $keptElsewhere = $actor->roles->where('name', '!=', $role->name)
             ->flatMap->permissions->pluck('name')
-            ->merge($user->getDirectPermissions()->pluck('name'))
-            ->contains('manage roles');
+            ->merge($actor->getDirectPermissions()->pluck('name'));
+        $keptHere = $action === 'save' ? collect((array) $request->input('permissions', [])) : collect();
 
-        $keptHere = $action === 'save' && in_array('manage roles', (array) $request->input('permissions', []), true);
+        $lost = collect(['roles.view', 'roles.update'])
+            ->reject(fn ($p) => $keptElsewhere->contains($p) || $keptHere->contains($p));
 
-        if (! $keptElsewhere && ! $keptHere) {
+        if ($lost->isNotEmpty()) {
             throw ValidationException::withMessages([
                 $action === 'save' ? 'permissions' : 'name' => $action === 'save'
-                    ? 'Izin "manage roles" tidak boleh dicabut dari role yang Anda pakai sendiri, karena Anda akan kehilangan akses ke halaman ini.'
-                    : 'Role ini sedang Anda pakai dan merupakan satu-satunya sumber izin "manage roles" Anda, jadi tidak dapat dihapus.',
+                    ? 'Izin melihat dan mengubah role tidak boleh dicabut dari role yang Anda pakai sendiri, karena Anda akan kehilangan akses ke halaman ini.'
+                    : 'Role ini sedang Anda pakai dan merupakan satu-satunya sumber izin mengelola role, jadi tidak dapat dihapus.',
             ]);
         }
     }

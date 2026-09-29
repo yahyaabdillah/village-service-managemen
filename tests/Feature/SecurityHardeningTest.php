@@ -17,11 +17,13 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\SubmitsCitizenRequests;
 use Tests\TestCase;
 
 class SecurityHardeningTest extends TestCase
 {
     use RefreshDatabase;
+    use SubmitsCitizenRequests;
 
     public function test_private_disk_is_configured_for_non_public_documents(): void
     {
@@ -224,20 +226,16 @@ class SecurityHardeningTest extends TestCase
         $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
         $requirement = $service->requirements()->firstOrFail();
 
-        $this->post(route('requests.store'), [
-            'service_type_id' => $service->id,
-            'nik' => '3201010101010001',
-            'applicant_name' => 'Yahya Abdillah',
-            'phone' => '081234567890',
-            'address' => 'Jl. Merdeka No. 1',
-            'fields' => ['keperluan' => 'Administrasi'],
+        // A rejected file is the citizen's problem to fix, so it comes back to the form with
+        // a message rather than surfacing as a server error.
+        $this->from(route('requests.create', $service))->post(route('requests.store'), $this->validSubmission($service, [
             'requirements' => [
                 $requirement->id => UploadedFile::fake()->createWithContent(
                     'ktp.pdf',
                     'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
                 ),
             ],
-        ])->assertServerError();
+        ]))->assertRedirect(route('requests.create', $service))->assertSessionHasErrors('error');
 
         $this->assertDatabaseCount('service_requests', 0);
     }

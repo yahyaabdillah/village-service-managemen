@@ -88,9 +88,13 @@ function initPhoneInputs() {
 
 function initSteppers() {
     document.querySelectorAll('[data-stepper]').forEach((stepper) => {
-        let index = 0;
         const panels = [...stepper.querySelectorAll('.step-panel')];
         const dots = [...stepper.querySelectorAll('.stepper-dot')];
+        // After a server-side validation error, open the first step that carries an
+        // error instead of dropping the user back on step 1 with the message hidden.
+        const hasError = (panel) => panel.querySelector('.field-error, [aria-invalid="true"]') !== null;
+        panels.forEach((panel, i) => dots[i]?.classList.toggle('has-error', hasError(panel)));
+        let index = Math.max(0, panels.findIndex(hasError));
         const validatePanel = (panel) => {
             const invalid = [...panel.querySelectorAll('input, select, textarea')]
                 .find((field) => !field.disabled && !field.checkValidity());
@@ -137,6 +141,38 @@ function initSteppers() {
             moveForward(dotIndex);
         }));
         show();
+    });
+}
+
+// Destructive forms carry data-confirm="<question>" (and optionally data-confirm-text,
+// data-confirm-label). One shared <dialog> in the layout replaces window.confirm().
+function initConfirmDialogs() {
+    const dialog = document.querySelector('[data-confirm-dialog]');
+    if (!dialog || typeof dialog.showModal !== 'function') return;
+    const title = dialog.querySelector('[data-confirm-title]');
+    const text = dialog.querySelector('[data-confirm-text]');
+    const accept = dialog.querySelector('[data-confirm-accept]');
+    let pending = null;
+
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-confirm') || form.dataset.confirmed === 'true') return;
+        event.preventDefault();
+        pending = form;
+        title.textContent = form.dataset.confirm || 'Lanjutkan tindakan ini?';
+        text.textContent = form.dataset.confirmText || 'Tindakan ini tidak dapat dibatalkan.';
+        accept.textContent = form.dataset.confirmLabel || 'Ya, lanjutkan';
+        accept.className = 'btn ' + (form.dataset.confirmTone || 'danger');
+        dialog.showModal();
+    });
+
+    dialog.addEventListener('close', () => {
+        if (dialog.returnValue === 'confirm' && pending) {
+            pending.dataset.confirmed = 'true';
+            pending.requestSubmit();
+        }
+        pending = null;
+        dialog.returnValue = '';
     });
 }
 
@@ -343,6 +379,27 @@ function initComboboxes() {
     });
 }
 
+function initPermissionMatrix() {
+    document.querySelectorAll('[data-permission-matrix]').forEach((matrix) => {
+        if (matrix.hasAttribute('data-locked')) return;
+        const boxes = () => [...matrix.querySelectorAll('input[type="checkbox"]')];
+        const count = matrix.querySelector('[data-permission-count]');
+        const total = boxes().length;
+        const render = () => {
+            if (count) count.textContent = `${boxes().filter((b) => b.checked).length} dari ${total} izin`;
+        };
+        matrix.addEventListener('change', render);
+        matrix.querySelectorAll('[data-matrix-preset]').forEach((button) => button.addEventListener('click', () => {
+            const preset = button.dataset.matrixPreset;
+            boxes().forEach((box) => {
+                box.checked = preset === 'all' ? true : preset === 'none' ? false : box.value.endsWith('.view');
+            });
+            render();
+        }));
+        render();
+    });
+}
+
 function initPermissionPickers() {
     document.querySelectorAll('[data-permission-picker]').forEach((picker) => {
         const search = picker.querySelector('[data-permission-search]');
@@ -389,6 +446,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initDropzones();
     initComboboxes();
     initPermissionPickers();
+    initPermissionMatrix();
+    initConfirmDialogs();
     if (document.getElementById('request-trend-chart')) {
         import('./dashboard-chart').then(({ initDashboardChart }) => initDashboardChart());
     }
