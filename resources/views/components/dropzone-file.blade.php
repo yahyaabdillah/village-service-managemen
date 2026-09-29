@@ -3,21 +3,23 @@
 
     $inputName = $name ?? 'file';
     $inputId = $id ?? 'dropzone-'.Str::slug(str_replace(['[', ']'], '-', $inputName)).'-'.Str::random(6);
-    $labelText = $label ?? 'Upload File';
-    $helpText = $help ?? 'Tarik & lepas file ke kotak ini atau klik untuk memilih file.';
+    $labelText = $label ?? 'Unggah berkas';
+    $helpText = $help ?? 'Tarik berkas ke kotak ini atau klik untuk memilih.';
     $acceptValue = $accept ?? null;
     $isRequired = (bool) ($required ?? false);
     $allowMultiple = (bool) ($multiple ?? false);
-    $iconText = $icon ?? '📎';
+    // A lucide icon name (e.g. "file-text") or, for older call sites, literal text.
+    $iconName = preg_match('/^[a-z0-9-]+$/', (string) ($icon ?? '')) ? $icon : null;
+    $iconText = $iconName ? null : ($icon ?? null);
 @endphp
 
 <div class="dropzone-field" data-dropzone>
     <label class="dropzone-label" for="{{ $inputId }}">
         {{ $labelText }}
-        @if($isRequired)<span class="badge">Wajib</span>@endif
+        @if($isRequired)<span class="req" aria-hidden="true">*</span>@else<span class="muted"> (opsional)</span>@endif
     </label>
     <div class="dropzone-box" data-dropzone-box>
-        <div class="dropzone-icon" aria-hidden="true">{{ $iconText }}</div>
+        <div class="dropzone-icon" aria-hidden="true">@if($iconName)<i data-lucide="{{ $iconName }}"></i>@else{{ $iconText ?? '' }}@if(! $iconText)<i data-lucide="paperclip"></i>@endif @endif</div>
         <div>
             <strong>Tarik file ke sini atau klik untuk upload</strong>
             <p class="muted">{{ $helpText }}</p>

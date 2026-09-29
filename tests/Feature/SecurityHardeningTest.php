@@ -261,17 +261,23 @@ class SecurityHardeningTest extends TestCase
         $this->get(route('requests.create', $service))
             ->assertOk()
             ->assertSee('phone-country', false)
-            ->assertSee('🇮🇩 +62', false)
+            ->assertSee('+62', false)
             ->assertSee('data-stepper', false);
 
+        // Long forms are split into named steps; short ones are a single card. Neither
+        // mentions the layout mechanism to the user.
         $this->actingAs($admin)->get(route('admin.residents.create'))
             ->assertOk()
-            ->assertSee('Stepper untuk input banyak')
-            ->assertSee('phone-country', false);
+            ->assertSee('data-stepper', false)
+            ->assertSee('1. Identitas')
+            ->assertSee('phone-country', false)
+            ->assertDontSee('Mode form');
 
         $this->actingAs($admin)->get(route('admin.roles.create'))
             ->assertOk()
-            ->assertSee('Modal untuk input sedikit');
+            ->assertSee('permission-matrix', false)
+            ->assertDontSee('Mode form')
+            ->assertDontSee('Modal untuk input sedikit');
     }
 
     public function test_health_endpoint_reports_core_dependencies(): void

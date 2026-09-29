@@ -1,109 +1,86 @@
-@extends('layouts.admin')
+@extends('layouts.admin', ['title' => $schema['title']])
 @section('content')
+@php($canCreate = auth()->user()?->can($permission.'.create'))
+@php($canUpdate = auth()->user()?->can($permission.'.update'))
+@php($canDelete = auth()->user()?->can($permission.'.delete'))
 <div class="page-head">
     <div>
-        <h1>{{ $title }}</h1>
-        <p class="muted">{{ $resource === 'residents' ? 'Kelola data penduduk desa.' : 'Kelola '.strtolower($title).'.' }}</p>
+        <h1>{{ $schema['title'] }}</h1>
+        <p class="muted">{{ $schema['description'] }}</p>
     </div>
     <div class="actions">
-        <a class="btn" href="{{ route('admin.'.$resource.'.create') }}">Tambah</a>
         @if($resource === 'residents')
-            <a class="btn secondary" href="{{ route('admin.residents.export') }}">Export CSV</a>
-            <a class="btn secondary" href="{{ route('admin.residents.template') }}">Template Excel</a>
+            @can('residents.export')<a class="btn secondary" href="{{ route('admin.residents.export') }}"><i data-lucide="download"></i> Ekspor CSV</a>@endcan
         @endif
+        @if($canCreate)<a class="btn" href="{{ route('admin.'.$resource.'.create') }}"><i data-lucide="plus"></i> Tambah {{ $schema['singular'] }}</a>@endif
     </div>
-</div>
-
-<div class="card toolbar">
-    <form method="GET" class="filters">
-        <label class="sr-only" for="{{ $resource }}-search">Cari data</label>
-        <input id="{{ $resource }}-search" name="q" value="{{ request('q') }}" placeholder="Cari data...">
-        <button class="btn" type="submit">Cari</button>
-        @if(request('q')) <a class="btn secondary" href="{{ route('admin.'.$resource.'.index') }}">Reset</a> @endif
-    </form>
 </div>
 
 @if($resource === 'residents')
-    <section class="card import-panel" aria-labelledby="resident-import-title">
-        <div class="import-panel-head">
-            <div>
-                <h2 id="resident-import-title">Import data penduduk</h2>
-                <p class="muted">Pilih satu file, validasi isinya, lalu konfirmasi import.</p>
-            </div>
-            <span class="badge">CSV / Excel</span>
-        </div>
-
-        <form method="POST" enctype="multipart/form-data" action="{{ route('admin.residents.import-preview') }}" class="filters import-form">
-            @csrf
-            @include('components.dropzone-file', [
-                'name' => 'csv',
-                'id' => 'residents-import-file',
-                'label' => 'File data penduduk',
-                'accept' => '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'required' => true,
-                'icon' => '📊',
-                'help' => 'Maksimal 5 MB. File akan diperiksa sebelum data disimpan.',
-            ])
-            <button class="btn secondary" type="submit">Validasi File</button>
-        </form>
-
-        @if(session('import_preview'))
-            <div class="import-preview" aria-live="polite">
-                <div>
-                    <h3>Hasil validasi</h3>
-                    <p><strong>{{ session('import_preview.file_name') }}</strong></p>
-                    <p class="muted">
-                        {{ session('import_preview.valid_rows') }} dari
-                        {{ session('import_preview.total_rows') }} baris valid.
-                    </p>
-                </div>
-
-                @if(session('import_preview.can_import') && session('resident_import.token'))
-                    <div class="notice alert">
-                        File valid dan siap diimport. Periksa nama file serta jumlah baris sebelum melanjutkan.
-                    </div>
-                    <form method="POST" action="{{ route('admin.residents.import') }}">
-                        @csrf
-                        <input type="hidden" name="import_token" value="{{ session('resident_import.token') }}">
-                        <button class="btn secondary" type="submit">Import {{ session('import_preview.valid_rows') }} Baris</button>
-                    </form>
-                @else
-                    <div class="notice errors" role="alert">
-                        <div>
-                            <strong>File belum dapat diimport.</strong>
-                            <ul>@foreach(session('import_preview.errors', []) as $error)<li>{{ $error }}</li>@endforeach</ul>
-                        </div>
-                    </div>
-                @endif
-            </div>
-        @endif
-    </section>
+    @can('residents.import')
+        @include('admin.crud.partials.residents-import')
+    @endcan
 @endif
 
-<div class="card">
+<div class="card table-card">
+    <form method="GET" class="filters" role="search">
+        <label class="sr-only" for="{{ $resource }}-search">Cari {{ $schema['singular'] }}</label>
+        <div class="input-icon"><i data-lucide="search"></i><input id="{{ $resource }}-search" name="q" value="{{ request('q') }}" placeholder="Cari {{ $schema['singular'] }}…"></div>
+        <button class="btn secondary" type="submit">Cari</button>
+        @if(request('q'))<a class="btn ghost" href="{{ route('admin.'.$resource.'.index') }}">Hapus pencarian</a>@endif
+        <span class="muted filters-count">{{ number_format($items->total(), 0, ',', '.') }} data</span>
+    </form>
     <div class="table-wrap">
         <table>
-            <thead><tr>@foreach($columns as $col)<th>{{ Str::headline($col) }}</th>@endforeach<th>Aksi</th></tr></thead>
+            <thead>
+                <tr>
+                    @foreach($schema['columns'] as $key => $column)<th @class(['num' => ($column['type'] ?? '') === 'number'])>{{ $column['label'] }}</th>@endforeach
+                    @if($canUpdate || $canDelete)<th class="action-cell"><span class="sr-only">Aksi</span></th>@endif
+                </tr>
+            </thead>
             <tbody>
                 @forelse($items as $item)
                     <tr>
-                        @foreach($columns as $col)
-                            <td>{{ is_array($item->{$col}) ? json_encode($item->{$col}) : $item->{$col} }}</td>
+                        @foreach($schema['columns'] as $key => $column)
+                            @php($cell = \App\Support\CrudSchema::cell($column, $item, $key))
+                            <td @class(['num' => $cell['num'], 'tabular' => $cell['mono']])>
+                                @if($cell['chip'])
+                                    <span class="badge {{ $cell['chip'] }}">{{ $cell['text'] }}</span>
+                                @elseif(($column['type'] ?? '') === 'title')
+                                    <span class="cell-title">{{ $cell['text'] }}</span>
+                                @else
+                                    {{ $cell['text'] }}
+                                @endif
+                                @if($cell['sub'])<small class="cell-sub">{{ $cell['sub'] }}</small>@endif
+                            </td>
                         @endforeach
-                        <td class="actions">
-                            <a class="btn secondary" href="{{ route('admin.'.$resource.'.edit', $item->id) }}">Edit</a>
-                            <form method="POST" style="display:inline" action="{{ route('admin.'.$resource.'.destroy', $item->id) }}">
-                                @csrf @method('DELETE')
-                                <button class="btn danger">Delete</button>
-                            </form>
-                        </td>
+                        @if($canUpdate || $canDelete)
+                            <td class="action-cell">
+                                <div class="row-actions">
+                                    @if($canUpdate)<a class="btn ghost icon" href="{{ route('admin.'.$resource.'.edit', $item->id) }}" aria-label="Ubah {{ $schema['singular'] }}" title="Ubah"><i data-lucide="pencil"></i></a>@endif
+                                    @if($canDelete)
+                                        <form method="POST" action="{{ route('admin.'.$resource.'.destroy', $item->id) }}" data-confirm="Hapus {{ $schema['singular'] }} ini?" data-confirm-text="Data yang dihapus tidak tampil lagi di panel." data-confirm-label="Ya, hapus">
+                                            @csrf @method('DELETE')
+                                            <button class="btn ghost icon danger-text" type="submit" aria-label="Hapus {{ $schema['singular'] }}" title="Hapus"><i data-lucide="trash-2"></i></button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
+                        @endif
                     </tr>
                 @empty
-                    <tr><td colspan="{{ count($columns) + 1 }}">Tidak ada data.</td></tr>
+                    <tr><td colspan="{{ count($schema['columns']) + 1 }}">
+                        <div class="empty-state">
+                            <span class="empty-icon"><i data-lucide="inbox"></i></span>
+                            <strong>{{ request('q') ? 'Tidak ada '.$schema['singular'].' yang cocok' : 'Belum ada '.$schema['singular'] }}</strong>
+                            <span>{{ request('q') ? 'Coba kata kunci lain atau hapus pencarian.' : 'Data yang ditambahkan akan tampil di sini.' }}</span>
+                            @if($canCreate && ! request('q'))<a class="btn" href="{{ route('admin.'.$resource.'.create') }}"><i data-lucide="plus"></i> Tambah {{ $schema['singular'] }}</a>@endif
+                        </div>
+                    </td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
-    {{ $items->links() }}
+    @if($items->hasPages())<div class="pagination-wrap">{{ $items->links() }}</div>@endif
 </div>
 @endsection

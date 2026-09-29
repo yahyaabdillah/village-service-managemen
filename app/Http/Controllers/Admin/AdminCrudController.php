@@ -3,14 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Announcement;
-use App\Models\FamilyCard;
-use App\Models\Resident;
-use App\Models\ServiceRequirement;
-use App\Models\ServiceType;
-use App\Models\ServiceTypeField;
 use App\Models\User;
-use App\Models\VillageProfile;
+use App\Support\CrudSchema;
 use App\Support\PermissionCatalog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -19,131 +13,102 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 
+/**
+ * One controller for the simple master-data screens. Everything screen-specific
+ * (columns, fields, labels) lives in CrudSchema; this class keeps the validation rules
+ * and the handful of behaviours that need code: role sync, user/role protection.
+ */
 class AdminCrudController extends Controller
 {
-    private array $map = [
-        'village-profiles' => [VillageProfile::class, 'Profil Desa'],
-        'family-cards' => [FamilyCard::class, 'Kartu Keluarga'],
-        'residents' => [Resident::class, 'Data Penduduk'],
-        'service-types' => [ServiceType::class, 'Jenis Layanan'],
-        'service-requirements' => [ServiceRequirement::class, 'Syarat Layanan'],
-        'service-type-fields' => [ServiceTypeField::class, 'Field Layanan'],
-        'announcements' => [Announcement::class, 'Pengumuman'],
-        'users' => [User::class, 'Pengguna'],
-        'roles' => [Role::class, 'Role'],
+    /** URL resource → permission resource in PermissionCatalog. */
+    private const PERMISSION_KEY = [
+        'village-profiles' => 'village-profile',
+        'service-requirements' => 'service-types',
+        'service-type-fields' => 'service-types',
     ];
 
     public function index(Request $request, string $resource)
     {
-        [$class, $title] = $this->resolve($resource);
-        $query = $class::query();
-        match ($resource) {
-            'users' => $query->with('roles'),
-            'roles' => $query->withCount(['permissions', 'users']),
-            default => $query,
-        };
-        if ($search = $request->string('q')->toString()) {
-            $query = $this->applySearch($query, $resource, $search);
+        $schema = CrudSchema::resource($resource);
+        $query = $schema['model']::query();
+        if (! empty($schema['with'])) {
+            $query->with($schema['with']);
+        }
+        if (! empty($schema['withCount'])) {
+            $query->withCount($schema['withCount']);
+        }
+        if ($search = trim($request->string('q')->toString())) {
+            $query->where(function ($q) use ($schema, $search) {
+                foreach ($schema['search'] ?? [] as $column) {
+                    $q->orWhere($column, 'like', "%{$search}%");
+                }
+            });
         }
 
         return view('admin.crud.index', [
             'resource' => $resource,
-            'title' => $title,
-            'items' => $query->latest('id')->paginate(20),
-            'columns' => $this->columns($resource),
+            'schema' => $schema,
+            'permission' => self::PERMISSION_KEY[$resource] ?? $resource,
+            'items' => $query->latest('id')->paginate(20)->withQueryString(),
         ]);
     }
 
     public function create(string $resource)
     {
-        [$class, $title] = $this->resolve($resource);
+        $schema = CrudSchema::resource($resource);
 
         return view('admin.crud.form', [
             'resource' => $resource,
-            'title' => 'Tambah '.$title,
-            'item' => new $class,
-            'fields' => $this->fields($resource),
+            'schema' => $schema,
+            'title' => 'Tambah '.$schema['singular'],
+            'item' => new $schema['model'],
             'options' => $this->options($resource),
         ]);
     }
 
     public function store(Request $request, string $resource)
     {
-        [$class] = $this->resolve($resource);
+        $schema = CrudSchema::resource($resource);
         $data = $this->validated($request, $resource);
-        $item = $class::create($this->transform($data, $resource));
+        $item = $schema['model']::create($this->transform($data, $resource));
         $this->syncRelations($item, $request, $resource);
 
-        return redirect()->route('admin.'.$resource.'.index')->with('status', 'Data berhasil dibuat.');
+        return redirect()->route('admin.'.$resource.'.index')->with('status', ucfirst($schema['singular']).' berhasil ditambahkan.');
     }
 
     public function edit(int $id, string $resource)
     {
-        [$class, $title] = $this->resolve($resource);
+        $schema = CrudSchema::resource($resource);
 
         return view('admin.crud.form', [
             'resource' => $resource,
-            'title' => 'Edit '.$title,
-            'item' => $class::findOrFail($id),
-            'fields' => $this->fields($resource),
+            'schema' => $schema,
+            'title' => 'Ubah '.$schema['singular'],
+            'item' => $schema['model']::findOrFail($id),
             'options' => $this->options($resource),
         ]);
     }
 
     public function update(Request $request, int $id, string $resource)
     {
-        [$class] = $this->resolve($resource);
-        $item = $class::findOrFail($id);
+        $schema = CrudSchema::resource($resource);
+        $item = $schema['model']::findOrFail($id);
         $data = $this->validated($request, $resource, $id);
         $this->guardAgainstLockout($request, $resource, $item, 'save');
         $item->update($this->transform($data, $resource, $item));
         $this->syncRelations($item, $request, $resource);
 
-        return redirect()->route('admin.'.$resource.'.index')->with('status', 'Data berhasil diperbarui.');
+        return redirect()->route('admin.'.$resource.'.index')->with('status', 'Perubahan '.$schema['singular'].' disimpan.');
     }
 
     public function destroy(Request $request, int $id, string $resource)
     {
-        [$class] = $this->resolve($resource);
-        $item = $class::findOrFail($id);
+        $schema = CrudSchema::resource($resource);
+        $item = $schema['model']::findOrFail($id);
         $this->guardAgainstLockout($request, $resource, $item, 'delete');
         $item->delete();
 
-        return back()->with('status', 'Data dihapus.');
-    }
-
-    private function resolve(string $resource): array
-    {
-        abort_unless(isset($this->map[$resource]), 404);
-
-        return $this->map[$resource];
-    }
-
-    private function applySearch($query, string $resource, string $search)
-    {
-        return match ($resource) {
-            'family-cards' => $query->where('family_card_number', 'like', "%$search%")->orWhere('head_of_family_name', 'like', "%$search%"),
-            'residents' => $query->where('nik', 'like', "%$search%")->orWhere('name', 'like', "%$search%"),
-            'service-types', 'announcements', 'roles' => $query->where('name', 'like', "%$search%"),
-            'users' => $query->where('name', 'like', "%$search%")->orWhere('email', 'like', "%$search%"),
-            default => $query,
-        };
-    }
-
-    private function columns(string $resource): array
-    {
-        return match ($resource) {
-            'village-profiles' => ['village_name', 'district', 'regency', 'is_active'],
-            'family-cards' => ['family_card_number', 'head_of_family_name', 'hamlet', 'rt', 'rw'],
-            'residents' => ['nik', 'name', 'gender', 'hamlet', 'rt', 'rw', 'is_active'],
-            'service-types' => ['name', 'slug', 'is_active', 'sort_order'],
-            'service-requirements' => ['service_type_id', 'name', 'is_required', 'max_file_size_kb'],
-            'service-type-fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'is_required'],
-            'announcements' => ['title', 'slug', 'is_published', 'published_at'],
-            'users' => ['name', 'email', 'role_label', 'is_active'],
-            'roles' => ['name', 'permissions_count', 'users_count'],
-            default => ['id'],
-        };
+        return back()->with('status', ucfirst($schema['singular']).' dihapus.');
     }
 
     /** Choices the form needs that cannot be derived from the model itself. */
@@ -164,34 +129,26 @@ class AdminCrudController extends Controller
         };
     }
 
-    private function fields(string $resource): array
-    {
-        return match ($resource) {
-            'family-cards' => ['family_card_number', 'head_of_family_name', 'address', 'hamlet', 'rt', 'rw', 'postal_code'],
-            'residents' => ['family_card_id', 'nik', 'name', 'gender', 'birth_place', 'birth_date', 'address', 'hamlet', 'rt', 'rw', 'religion', 'marital_status', 'occupation', 'phone', 'is_active'],
-            'village-profiles' => ['village_name', 'district', 'regency', 'province', 'address', 'phone', 'email', 'website', 'village_head_name', 'village_head_nip', 'default_signer_name', 'default_signer_title', 'is_active'],
-            'service-types' => ['name', 'slug', 'description', 'is_active', 'sort_order'],
-            'service-requirements' => ['service_type_id', 'name', 'description', 'is_required', 'allowed_file_types', 'max_file_size_kb', 'sort_order'],
-            'service-type-fields' => ['service_type_id', 'label', 'field_key', 'field_type', 'options', 'is_required', 'placeholder', 'help_text', 'sort_order'],
-            'announcements' => ['title', 'slug', 'content', 'excerpt', 'published_at', 'is_published'],
-            'users' => ['name', 'email', 'password', 'phone', 'is_active', 'roles'],
-            'roles' => ['name', 'permissions'],
-            default => [],
-        };
-    }
-
     private function validated(Request $request, string $resource, ?int $id = null): array
     {
+        $unique = fn (string $table, string $column) => 'unique:'.$table.','.$column.','.($id ?? 'NULL').',id';
+        $phone = ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'];
+
         $rules = match ($resource) {
-            'family-cards' => ['family_card_number' => ['required', 'string', 'max:50', 'unique:family_cards,family_card_number,'.($id ?? 'NULL').',id'], 'head_of_family_name' => ['required'], 'address' => ['required'], 'hamlet' => ['nullable'], 'rt' => ['nullable'], 'rw' => ['nullable'], 'postal_code' => ['nullable']],
-            'residents' => ['family_card_id' => ['nullable', 'exists:family_cards,id'], 'nik' => ['required', 'string', 'unique:residents,nik,'.($id ?? 'NULL').',id'], 'name' => ['required'], 'gender' => ['required'], 'birth_place' => ['nullable'], 'birth_date' => ['nullable', 'date'], 'address' => ['required'], 'hamlet' => ['nullable'], 'rt' => ['nullable'], 'rw' => ['nullable'], 'religion' => ['nullable'], 'marital_status' => ['nullable'], 'occupation' => ['nullable'], 'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'], 'is_active' => ['nullable', 'boolean']],
-            'village-profiles' => ['village_name' => ['required'], 'district' => ['nullable'], 'regency' => ['nullable'], 'province' => ['nullable'], 'address' => ['nullable'], 'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'], 'email' => ['nullable', 'email'], 'website' => ['nullable'], 'village_head_name' => ['nullable'], 'village_head_nip' => ['nullable'], 'default_signer_name' => ['nullable'], 'default_signer_title' => ['nullable'], 'is_active' => ['nullable', 'boolean']],
-            'service-types' => ['name' => ['required'], 'slug' => ['nullable', 'unique:service_types,slug,'.($id ?? 'NULL').',id'], 'description' => ['nullable'], 'is_active' => ['nullable', 'boolean'], 'sort_order' => ['nullable', 'integer']],
-            'service-requirements' => ['service_type_id' => ['required', 'exists:service_types,id'], 'name' => ['required'], 'description' => ['nullable'], 'is_required' => ['nullable', 'boolean'], 'allowed_file_types' => ['nullable'], 'max_file_size_kb' => ['nullable', 'integer'], 'sort_order' => ['nullable', 'integer']],
-            'service-type-fields' => ['service_type_id' => ['required', 'exists:service_types,id'], 'label' => ['required'], 'field_key' => ['required'], 'field_type' => ['required'], 'options' => ['nullable'], 'is_required' => ['nullable', 'boolean'], 'placeholder' => ['nullable'], 'help_text' => ['nullable'], 'sort_order' => ['nullable', 'integer']],
-            'announcements' => ['title' => ['required'], 'slug' => ['nullable', 'unique:announcements,slug,'.($id ?? 'NULL').',id'], 'content' => ['required'], 'excerpt' => ['nullable'], 'published_at' => ['nullable', 'date'], 'is_published' => ['nullable', 'boolean']],
-            'users' => ['name' => ['required'], 'email' => ['required', 'email', 'unique:users,email,'.($id ?? 'NULL').',id'], 'password' => [$id ? 'nullable' : 'required', 'string', 'min:8'], 'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,18}$/'], 'is_active' => ['nullable', 'boolean'], 'roles' => ['nullable', 'array'], 'roles.*' => ['nullable', 'string', 'max:255', $this->roleAssignable($request)]],
-            'roles' => ['name' => ['required', 'string', 'max:255', 'unique:roles,name,'.($id ?? 'NULL').',id'], 'permissions' => ['nullable', 'array'], 'permissions.*' => ['string', 'exists:permissions,name']],
+            'family-cards' => ['family_card_number' => ['required', 'digits:16', $unique('family_cards', 'family_card_number')], 'head_of_family_name' => ['required', 'string', 'max:255'], 'address' => ['required', 'string'], 'hamlet' => ['nullable', 'string', 'max:255'], 'rt' => ['nullable', 'string', 'max:10'], 'rw' => ['nullable', 'string', 'max:10'], 'postal_code' => ['nullable', 'string', 'max:10']],
+            'residents' => ['family_card_id' => ['nullable', 'exists:family_cards,id'], 'nik' => ['required', 'digits:16', $unique('residents', 'nik')], 'name' => ['required', 'string', 'max:255'], 'gender' => ['required', 'in:male,female'], 'birth_place' => ['nullable', 'string', 'max:255'], 'birth_date' => ['nullable', 'date', 'before:tomorrow'], 'address' => ['required', 'string'], 'hamlet' => ['nullable', 'string', 'max:255'], 'rt' => ['nullable', 'string', 'max:10'], 'rw' => ['nullable', 'string', 'max:10'], 'religion' => ['nullable', 'string', 'max:50'], 'marital_status' => ['nullable', 'string', 'max:50'], 'occupation' => ['nullable', 'string', 'max:255'], 'phone' => $phone, 'is_active' => ['nullable', 'boolean']],
+            'village-profiles' => ['village_name' => ['required', 'string', 'max:255'], 'district' => ['nullable', 'string', 'max:255'], 'regency' => ['nullable', 'string', 'max:255'], 'province' => ['nullable', 'string', 'max:255'], 'address' => ['nullable', 'string'], 'phone' => $phone, 'email' => ['nullable', 'email'], 'website' => ['nullable', 'url'], 'village_head_name' => ['nullable', 'string', 'max:255'], 'village_head_nip' => ['nullable', 'string', 'max:50'], 'default_signer_name' => ['nullable', 'string', 'max:255'], 'default_signer_title' => ['nullable', 'string', 'max:255'], 'is_active' => ['nullable', 'boolean']],
+            'service-types' => ['name' => ['required', 'string', 'max:255'], 'slug' => ['nullable', 'alpha_dash', $unique('service_types', 'slug')], 'description' => ['nullable', 'string'], 'is_active' => ['nullable', 'boolean'], 'sort_order' => ['nullable', 'integer', 'min:0']],
+            'service-requirements' => ['service_type_id' => ['required', 'exists:service_types,id'], 'name' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string'], 'is_required' => ['nullable', 'boolean'], 'allowed_file_types' => ['nullable', 'string'], 'max_file_size_kb' => ['nullable', 'integer', 'min:1', 'max:6144'], 'sort_order' => ['nullable', 'integer', 'min:0']],
+            'service-type-fields' => ['service_type_id' => ['required', 'exists:service_types,id'], 'label' => ['required', 'string', 'max:255'], 'field_key' => ['required', 'regex:/^[a-z][a-z0-9_]*$/', 'max:100', function ($attribute, $value, $fail) use ($request, $id) {
+                $exists = \App\Models\ServiceTypeField::where('service_type_id', $request->input('service_type_id'))->where('field_key', $value)->when($id, fn ($q) => $q->whereKeyNot($id))->exists();
+                if ($exists) {
+                    $fail('Kunci isian ini sudah dipakai pada layanan yang sama.');
+                }
+            }], 'field_type' => ['required', 'in:'.implode(',', array_keys(CrudSchema::FIELD_TYPES))], 'options' => ['nullable', 'string', 'required_if:field_type,select'], 'is_required' => ['nullable', 'boolean'], 'is_active' => ['nullable', 'boolean'], 'placeholder' => ['nullable', 'string', 'max:255'], 'help_text' => ['nullable', 'string', 'max:1000'], 'sort_order' => ['nullable', 'integer', 'min:0']],
+            'announcements' => ['title' => ['required', 'string', 'max:255'], 'content' => ['required', 'string'], 'excerpt' => ['nullable', 'string', 'max:500'], 'published_at' => ['nullable', 'date'], 'is_published' => ['nullable', 'boolean']],
+            'users' => ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', $unique('users', 'email')], 'password' => [$id ? 'nullable' : 'required', 'string', 'min:8'], 'phone' => $phone, 'is_active' => ['nullable', 'boolean'], 'roles' => ['nullable', 'array'], 'roles.*' => ['nullable', 'string', 'max:255', $this->roleAssignable($request)]],
+            'roles' => ['name' => ['required', 'string', 'max:255', $unique('roles', 'name')], 'permissions' => ['nullable', 'array'], 'permissions.*' => ['string', 'exists:permissions,name']],
             default => [],
         };
 
@@ -206,15 +163,18 @@ class AdminCrudController extends Controller
             }
         }
         if ($resource === 'service-types') {
-            $data['slug'] = $data['slug'] ?? Str::slug($data['name']);
+            $data['slug'] = filled($data['slug'] ?? null) ? $data['slug'] : Str::slug($data['name']);
         }
         if ($resource === 'announcements') {
-            $data['slug'] = $data['slug'] ?? Str::slug($data['title']);
+            $data['slug'] = $item?->slug ?: Str::slug($data['title']).'-'.Str::lower(Str::random(4));
+            if (! empty($data['is_published']) && empty($data['published_at'])) {
+                $data['published_at'] = now();
+            }
         }
-        if (in_array($resource, ['service-requirements', 'service-type-fields'])) {
-            foreach (['allowed_file_types', 'options'] as $json) {
-                if (isset($data[$json]) && is_string($data[$json])) {
-                    $data[$json] = array_values(array_filter(array_map('trim', explode(',', $data[$json]))));
+        if (in_array($resource, ['service-requirements', 'service-type-fields'], true)) {
+            foreach (['allowed_file_types', 'options'] as $list) {
+                if (array_key_exists($list, $data)) {
+                    $data[$list] = is_string($data[$list]) ? array_values(array_filter(array_map('trim', explode(',', $data[$list])))) : ($data[$list] ?? []);
                 }
             }
         }
