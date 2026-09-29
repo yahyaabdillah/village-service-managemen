@@ -16,7 +16,7 @@ class RoleAccessControlTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['manage users', 'manage roles', 'manage residents'] as $permission) {
+        foreach (['manage users', 'manage roles', 'manage residents', 'manage service requests'] as $permission) {
             Permission::findOrCreate($permission, 'web');
         }
     }
@@ -237,5 +237,67 @@ class RoleAccessControlTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->assertSame(['Sekretaris'], $actor->fresh()->getRoleNames()->all());
+    }
+
+    public function test_sidebar_links_to_the_role_screen_for_role_managers(): void
+    {
+        $actor = $this->userWith(['manage roles']);
+
+        $this->actingAs($actor)->get(route('admin.roles.index'))
+            ->assertOk()
+            ->assertSee(route('admin.roles.index'))
+            ->assertSee('Role &amp; Izin', false);
+    }
+
+    public function test_sidebar_hides_screens_the_viewer_cannot_open(): void
+    {
+        $actor = $this->userWith(['manage residents']);
+
+        $response = $this->actingAs($actor)->get(route('admin.residents.index'))->assertOk();
+
+        $response->assertSee('Penduduk');
+        $response->assertDontSee(route('admin.roles.index'));
+        $response->assertDontSee(route('admin.users.index'));
+        // The heading must go with its only group member.
+        $response->assertDontSee('>Sistem<', false);
+    }
+
+    public function test_sidebar_shows_user_and_role_links_separately(): void
+    {
+        $actor = $this->userWith(['manage users', 'manage roles']);
+
+        $this->actingAs($actor)->get(route('admin.users.index'))
+            ->assertOk()
+            ->assertSee(route('admin.users.index'))
+            ->assertSee(route('admin.roles.index'));
+    }
+
+    public function test_login_lands_on_the_first_screen_the_role_allows(): void
+    {
+        $user = $this->userWith(['manage users'], 'Staf Kepegawaian');
+        $user->forceFill(['password' => 'rahasia123', 'is_active' => true])->save();
+
+        $this->post(route('login.attempt'), ['email' => $user->email, 'password' => 'rahasia123'])
+            ->assertRedirect(route('admin.users.index'));
+    }
+
+    public function test_login_still_prefers_the_dashboard_for_a_full_role(): void
+    {
+        $user = $this->userWith(['manage service requests', 'manage users'], 'Lengkap');
+        $user->forceFill(['password' => 'rahasia123', 'is_active' => true])->save();
+
+        $this->post(route('login.attempt'), ['email' => $user->email, 'password' => 'rahasia123'])
+            ->assertRedirect(route('admin.dashboard'));
+    }
+
+    public function test_login_is_refused_when_the_role_grants_nothing(): void
+    {
+        $user = $this->userWith([], 'Tanpa Izin');
+        $user->forceFill(['password' => 'rahasia123', 'is_active' => true])->save();
+
+        $this->post(route('login.attempt'), ['email' => $user->email, 'password' => 'rahasia123'])
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
     }
 }

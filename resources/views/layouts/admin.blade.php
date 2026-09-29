@@ -17,23 +17,12 @@
         </a>
 
         <nav class="side-nav" aria-label="Navigasi admin">
-            <div class="nav-section">Pelayanan</div>
-            <a class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
-            <a class="{{ request()->routeIs('admin.service-requests.*') ? 'active' : '' }}" href="{{ route('admin.service-requests.index') }}"><i data-lucide="inbox"></i><span>Pengajuan</span></a>
-
-            <div class="nav-section">Data Desa</div>
-            <a class="{{ request()->routeIs('admin.residents.*') ? 'active' : '' }}" href="{{ route('admin.residents.index') }}"><i data-lucide="users"></i><span>Penduduk</span></a>
-            <a class="{{ request()->routeIs('admin.family-cards.*') ? 'active' : '' }}" href="{{ route('admin.family-cards.index') }}"><i data-lucide="contact-round"></i><span>Kartu Keluarga</span></a>
-            <a class="{{ request()->routeIs('admin.service-types.*', 'admin.service-requirements.*', 'admin.service-type-fields.*') ? 'active' : '' }}" href="{{ route('admin.service-types.index') }}"><i data-lucide="grid-2x2-check"></i><span>Konfigurasi Layanan</span></a>
-            <a class="{{ request()->routeIs('admin.document-templates.*') ? 'active' : '' }}" href="{{ route('admin.document-templates.index') }}"><i data-lucide="file-pen-line"></i><span>Template Dokumen</span></a>
-            <a class="{{ request()->routeIs('admin.announcements.*') ? 'active' : '' }}" href="{{ route('admin.announcements.index') }}"><i data-lucide="megaphone"></i><span>Pengumuman</span></a>
-
-            <div class="nav-section">Sistem</div>
-            <a class="{{ request()->routeIs('admin.users.*', 'admin.roles.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}"><i data-lucide="user-cog"></i><span>Akses Pengguna</span></a>
-            <a class="{{ request()->routeIs('admin.activity-logs.*') ? 'active' : '' }}" href="{{ route('admin.activity-logs.index') }}"><i data-lucide="history"></i><span>Jejak Audit</span></a>
-            <!-- <a class="{{ request()->routeIs('admin.security-logs.*', 'admin.notification-logs.*') ? 'active' : '' }}" href="{{ route('admin.security-logs.index') }}"><i data-lucide="scan-search"></i><span>Log Sistem</span></a> -->
-            <!-- <a href="{{ config('observability.grafana_url') }}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i><span>Grafana</span></a> -->
-            <a class="{{ request()->routeIs('admin.whatsapp.*') ? 'active' : '' }}" href="{{ route('admin.whatsapp.index') }}"><i data-lucide="message-circle-more"></i><span>WhatsApp</span></a>
+            @foreach(\App\Support\AdminNavigation::visibleTo(auth()->user()) as $section => $links)
+                <div class="nav-section">{{ $section }}</div>
+                @foreach($links as $link)
+                    <a class="{{ request()->routeIs(...$link['patterns']) ? 'active' : '' }}" href="{{ route($link['route']) }}"><i data-lucide="{{ $link['icon'] }}"></i><span>{{ $link['label'] }}</span></a>
+                @endforeach
+            @endforeach
         </nav>
 
         <div class="side-footer">

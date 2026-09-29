@@ -29,8 +29,8 @@ class AdminCrudController extends Controller
         'service-requirements' => [ServiceRequirement::class, 'Syarat Layanan'],
         'service-type-fields' => [ServiceTypeField::class, 'Field Layanan'],
         'announcements' => [Announcement::class, 'Pengumuman'],
-        'users' => [User::class, 'Users'],
-        'roles' => [Role::class, 'Roles'],
+        'users' => [User::class, 'Pengguna'],
+        'roles' => [Role::class, 'Role'],
     ];
 
     public function index(Request $request, string $resource)

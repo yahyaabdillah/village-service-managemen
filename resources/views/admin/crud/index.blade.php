@@ -83,7 +83,7 @@
 <div class="card">
     <div class="table-wrap">
         <table>
-            <thead><tr>@foreach($columns as $col)<th>{{ $col }}</th>@endforeach<th>Aksi</th></tr></thead>
+            <thead><tr>@foreach($columns as $col)<th>{{ Str::headline($col) }}</th>@endforeach<th>Aksi</th></tr></thead>
             <tbody>
                 @forelse($items as $item)
                     <tr>
