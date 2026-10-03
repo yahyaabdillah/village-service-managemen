@@ -386,7 +386,12 @@ class ProductionReadinessTest extends TestCase
             ->assertOk()
             ->assertSee('Dalam Rentang')
             ->assertDontSee('Di Luar Rentang')
-            ->assertSee(route('admin.service-requests.report'), false);
+            // The report button submits the filter form itself (via form=) rather than
+            // linking to a URL baked in at page-render time, so it downloads whatever is
+            // currently typed — including an edit made but not yet applied with "Terapkan" —
+            // instead of silently re-downloading the filters the page happened to load with.
+            ->assertSee('id="request-filters-form"', false)
+            ->assertSee('form="request-filters-form" formaction="'.route('admin.service-requests.report').'" formtarget="_blank"', false);
 
         // An end date before the start date is a mistake, not a filter: show it as such
         // rather than silently returning nothing.

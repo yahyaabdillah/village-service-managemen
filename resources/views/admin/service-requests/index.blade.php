@@ -7,7 +7,12 @@
     </div>
     @can('service-requests.export')
         <div class="actions">
-            <a class="btn secondary" href="{{ route('admin.service-requests.report', request()->query()) }}" target="_blank" rel="noopener"><i data-lucide="file-down"></i> Unduh laporan (PDF)</a>
+            {{-- A plain <a href="...?{{ request()->query() }}"> only ever reflects the filters
+                 that were already applied when the page rendered. Tying this button to the
+                 filter form instead (via form=) means it always sends whatever is currently
+                 typed/selected, applied or not, so "download" never means "download something
+                 else than what I just set up". --}}
+            <button class="btn secondary" type="submit" form="request-filters-form" formaction="{{ route('admin.service-requests.report') }}" formtarget="_blank"><i data-lucide="file-down"></i> Unduh laporan (PDF)</button>
         </div>
     @endcan
 </div>
@@ -21,7 +26,7 @@
     @endforeach
 </div>
 
-<form class="card request-filters" method="GET" role="search">
+<form id="request-filters-form" class="card request-filters" method="GET" role="search">
     <div class="filter-field filter-search">
         <label for="request-search">Cari pengajuan</label>
         <div class="input-icon"><i data-lucide="search"></i><input id="request-search" name="q" value="{{ request('q') }}" placeholder="Kode, nama, atau NIK"></div>
