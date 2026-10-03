@@ -22,11 +22,11 @@
 </div>
 
 <form class="card request-filters" method="GET" role="search">
-    <div class="filter-search">
+    <div class="filter-field filter-search">
         <label for="request-search">Cari pengajuan</label>
         <div class="input-icon"><i data-lucide="search"></i><input id="request-search" name="q" value="{{ request('q') }}" placeholder="Kode, nama, atau NIK"></div>
     </div>
-    <div>
+    <div class="filter-field">
         <label for="request-status">Status</label>
         <select id="request-status" name="status">
             <option value="">Semua status</option>
@@ -35,7 +35,7 @@
             @endforeach
         </select>
     </div>
-    <div>
+    <div class="filter-field">
         <label for="request-service">Layanan</label>
         <select id="request-service" name="service_type_id">
             <option value="">Semua layanan</option>
@@ -45,13 +45,13 @@
         </select>
     </div>
     <div class="filter-date-range">
-        <div>
+        <div class="filter-field">
             <label for="request-from">Dari tanggal</label>
             {{-- old() first: after a rejected range (misalnya "sampai" sebelum "dari"), the
                  clerk sees exactly what they typed, not whatever the previous page had. --}}
             <input id="request-from" type="date" name="from" value="{{ old('from', request('from')) }}" max="{{ old('to', request('to')) ?: now()->toDateString() }}" @error('to') aria-invalid="true" @enderror>
         </div>
-        <div>
+        <div class="filter-field">
             <label for="request-to">Sampai tanggal</label>
             <input id="request-to" type="date" name="to" value="{{ old('to', request('to')) }}" min="{{ old('from', request('from')) }}" max="{{ now()->toDateString() }}" @error('to') aria-invalid="true" @enderror>
             @error('to')<p class="field-error">{{ $message }}</p>@enderror

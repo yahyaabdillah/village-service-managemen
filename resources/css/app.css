@@ -499,10 +499,22 @@ details.import-details[open] > summary { margin-bottom: 1rem; }
 .request-person small { color: var(--muted); font-size: .7rem; }
 
 /* Request operations */
-.request-filters { display: grid; grid-template-columns: minmax(14rem, 1.3fr) minmax(10rem, .6fr) minmax(12rem, .9fr) minmax(15rem, .9fr) auto; align-items: end; gap: .75rem; }
+/* Flex-wrap, not a fixed grid: a grid's column widths are sized against the viewport
+   media query breakpoints below, which don't know the sidebar is eating ~280px of
+   that width — the two don't always agree, and a date input (which refuses to shrink
+   below its own content) would then overlap the button beside it instead of wrapping.
+   Flex items always keep their minimum content width and wrap onto a new line instead. */
+.request-filters { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
 .request-filters label { margin-top: 0; font-size: .75rem; }
-.filter-date-range { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-.filter-actions { display: flex; gap: .5rem; }
+/* flex-basis is a main-axis size: it means width here and would mean height the moment
+   a mobile breakpoint flips flex-direction to column, so every breakpoint that does
+   that must also reset it back to auto — .filter-field exists so there is one place
+   to do that instead of three divergent flex shorthands. */
+.filter-field { flex: 1 1 10rem; min-width: 0; }
+.filter-search { flex: 2 1 15rem; }
+.filter-date-range { display: flex; flex-wrap: wrap; gap: .5rem; flex: 2 1 18rem; }
+.filter-date-range .filter-field { flex-basis: 8.5rem; }
+.filter-actions { display: flex; gap: .5rem; flex: 0 0 auto; }
 .input-icon { position: relative; }
 .input-icon svg { position: absolute; left: .8rem; top: 50%; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
 .input-icon input { padding-left: 2.5rem; }
@@ -715,7 +727,7 @@ details.import-details[open] > summary { margin-bottom: 1rem; }
     .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .builder-shell { grid-template-columns: 13rem minmax(25rem,1fr); }
     .builder-panel.right { position: fixed; inset: 5rem 0 0 auto; z-index: 30; width: 19rem; box-shadow: -10px 0 30px rgba(12,42,34,.15); transform: translateX(105%); transition: transform var(--dur-short) var(--ease-out); }
-    .request-filters, .audit-filters { grid-template-columns: 1fr 1fr; }
+    .audit-filters { grid-template-columns: 1fr 1fr; }
     .builder-page.inspector-open .builder-panel.right { transform: translateX(0); }
 }
 @media (max-width: 900px) {
@@ -767,7 +779,9 @@ details.import-details[open] > summary { margin-bottom: 1rem; }
     .admin-main { padding-inline: 1rem; }
     .filters input, .filters select { width: 100%; min-width: 0; }
     .phone-input { grid-template-columns: 1fr; }
-    .request-filters, .status-summary, .audit-filters { grid-template-columns: 1fr; }
+    .status-summary, .audit-filters { grid-template-columns: 1fr; }
+    .request-filters, .filter-date-range { flex-direction: column; align-items: stretch; }
+    .request-filters .filter-field { flex-basis: auto; }
     .filter-actions .btn { flex: 1; }
     .download-ready { grid-template-columns: auto 1fr; }
     .download-ready form { grid-column: 1 / -1; }
