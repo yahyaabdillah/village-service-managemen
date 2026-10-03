@@ -5,11 +5,16 @@
         <h1>Pengajuan surat</h1>
         <p class="muted">Tinjau berkas warga, terbitkan dokumen, dan pantau setiap pengajuan dari satu tempat.</p>
     </div>
+    @can('service-requests.export')
+        <div class="actions">
+            <a class="btn secondary" href="{{ route('admin.service-requests.report', request()->query()) }}" target="_blank" rel="noopener"><i data-lucide="file-down"></i> Unduh laporan (PDF)</a>
+        </div>
+    @endcan
 </div>
 
 <div class="status-strip" aria-label="Ringkasan status">
     @foreach(['submitted' => 'Perlu diperiksa', 'verified' => 'Siap diterbitkan', 'processing' => 'Sedang diproses', 'completed' => 'Selesai', 'rejected' => 'Ditolak'] as $key => $label)
-        <a class="status-strip-item {{ request('status') === $key ? 'active' : '' }}" href="{{ route('admin.service-requests.index', array_filter(['status' => $key, 'q' => request('q'), 'service_type_id' => request('service_type_id')])) }}">
+        <a class="status-strip-item {{ request('status') === $key ? 'active' : '' }}" href="{{ route('admin.service-requests.index', array_filter(['status' => $key, 'q' => request('q'), 'service_type_id' => request('service_type_id'), 'from' => request('from'), 'to' => request('to')])) }}">
             <span class="badge {{ \App\Models\ServiceRequest::statusTone($key) }} plain">{{ $label }}</span>
             <strong class="tabular">{{ number_format($counts[$key] ?? 0, 0, ',', '.') }}</strong>
         </a>
@@ -39,9 +44,22 @@
             @endforeach
         </select>
     </div>
+    <div class="filter-date-range">
+        <div>
+            <label for="request-from">Dari tanggal</label>
+            {{-- old() first: after a rejected range (misalnya "sampai" sebelum "dari"), the
+                 clerk sees exactly what they typed, not whatever the previous page had. --}}
+            <input id="request-from" type="date" name="from" value="{{ old('from', request('from')) }}" max="{{ old('to', request('to')) ?: now()->toDateString() }}" @error('to') aria-invalid="true" @enderror>
+        </div>
+        <div>
+            <label for="request-to">Sampai tanggal</label>
+            <input id="request-to" type="date" name="to" value="{{ old('to', request('to')) }}" min="{{ old('from', request('from')) }}" max="{{ now()->toDateString() }}" @error('to') aria-invalid="true" @enderror>
+            @error('to')<p class="field-error">{{ $message }}</p>@enderror
+        </div>
+    </div>
     <div class="filter-actions">
         <button class="btn secondary" type="submit"><i data-lucide="list-filter"></i> Terapkan</button>
-        @if(request()->hasAny(['q', 'status', 'service_type_id']))<a class="btn ghost" href="{{ route('admin.service-requests.index') }}">Reset</a>@endif
+        @if(request()->hasAny(['q', 'status', 'service_type_id', 'from', 'to']))<a class="btn ghost" href="{{ route('admin.service-requests.index') }}">Reset</a>@endif
     </div>
 </form>
 
@@ -65,7 +83,7 @@
                     <td class="action-cell"><a class="btn {{ $needsAction ? '' : 'secondary' }} small" href="{{ route('admin.service-requests.show', $serviceRequest) }}">{{ $needsAction ? 'Proses' : 'Lihat' }} <i data-lucide="arrow-right"></i></a></td>
                 </tr>
             @empty
-                <tr><td colspan="7"><div class="empty-state"><span class="empty-icon"><i data-lucide="inbox"></i></span><strong>{{ request()->hasAny(['q', 'status', 'service_type_id']) ? 'Tidak ada pengajuan yang cocok' : 'Belum ada pengajuan' }}</strong><span>{{ request()->hasAny(['q', 'status', 'service_type_id']) ? 'Ubah filter atau hapus pencarian.' : 'Pengajuan yang dikirim warga dari situs akan tampil di sini.' }}</span></div></td></tr>
+                <tr><td colspan="7"><div class="empty-state"><span class="empty-icon"><i data-lucide="inbox"></i></span><strong>{{ request()->hasAny(['q', 'status', 'service_type_id', 'from', 'to']) ? 'Tidak ada pengajuan yang cocok' : 'Belum ada pengajuan' }}</strong><span>{{ request()->hasAny(['q', 'status', 'service_type_id', 'from', 'to']) ? 'Ubah filter atau hapus pencarian.' : 'Pengajuan yang dikirim warga dari situs akan tampil di sini.' }}</span></div></td></tr>
             @endforelse
             </tbody>
         </table>

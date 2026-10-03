@@ -42,6 +42,11 @@ Route::prefix('admin')
 
         Route::middleware($can('service-requests.view'))->group(function () {
             Route::get('/service-requests', [ServiceRequestController::class, 'index'])->name('service-requests.index');
+        });
+        // Registered ahead of the {serviceRequest} wildcard below so "report" is never
+        // captured as a request id.
+        Route::get('/service-requests/report', [ServiceRequestController::class, 'exportReport'])->middleware($can('service-requests.export'))->name('service-requests.report');
+        Route::middleware($can('service-requests.view'))->group(function () {
             Route::get('/service-requests/{serviceRequest}', [ServiceRequestController::class, 'show'])->name('service-requests.show');
             Route::get('/service-requests/{serviceRequest}/files/{requestFile}/preview', [ServiceRequestController::class, 'previewRequirementFile'])->name('service-requests.files.preview');
             Route::get('/service-requests/{serviceRequest}/files/{requestFile}/download', [ServiceRequestController::class, 'downloadRequirementFile'])->name('service-requests.files.download');

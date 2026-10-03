@@ -11,8 +11,10 @@ use App\Models\ServiceType;
 use App\Services\DocumentGenerationService;
 use App\Services\MalwareScanner;
 use App\Services\PrivateDocumentResponse;
+use App\Services\ServiceRequestReportService;
 use App\Services\WhatsAppNotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -21,6 +23,43 @@ use InvalidArgumentException;
 class ServiceRequestController extends Controller
 {
     public function index(Request $request)
+    {
+        $query = $this->filtered($request);
+
+        return view('admin.service-requests.index', [
+            'requests' => $query->paginate(20)->withQueryString(),
+            'serviceTypes' => ServiceType::orderBy('name')->get(),
+            'counts' => ServiceRequest::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status'),
+        ]);
+    }
+
+    /**
+     * The same table the clerk is looking at, as a printable PDF. Every active filter
+     * (search, status, service, date range) carries over from the query string.
+     */
+    public function exportReport(Request $request, ServiceRequestReportService $report)
+    {
+        $query = $this->filtered($request);
+        $serviceType = $request->filled('service_type_id') ? ServiceType::find($request->integer('service_type_id')) : null;
+
+        $pdf = $report->build($query, [
+            'q' => trim($request->string('q')->toString()) ?: null,
+            'status' => array_key_exists($request->string('status')->toString(), ServiceRequest::statuses()) ? $request->string('status')->toString() : null,
+            'service_type_label' => $serviceType?->name,
+            'from' => $request->string('from')->toString() ?: null,
+            'to' => $request->string('to')->toString() ?: null,
+        ]);
+
+        $filename = 'laporan-pengajuan-'.now()->format('Y-m-d-His').'.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
+    /** The filtered request list shared by the table and the PDF report. */
+    private function filtered(Request $request): \Illuminate\Database\Eloquent\Builder
     {
         $query = ServiceRequest::with('serviceType')->withCount('generatedDocuments')->latest();
 
@@ -37,11 +76,24 @@ class ServiceRequestController extends Controller
         if ($request->filled('service_type_id')) {
             $query->where('service_type_id', $request->integer('service_type_id'));
         }
+        $this->validateDateRange($request);
+        if ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', Carbon::parse($request->string('from')->toString()));
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', Carbon::parse($request->string('to')->toString()));
+        }
 
-        return view('admin.service-requests.index', [
-            'requests' => $query->paginate(20)->withQueryString(),
-            'serviceTypes' => ServiceType::orderBy('name')->get(),
-            'counts' => ServiceRequest::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status'),
+        return $query;
+    }
+
+    private function validateDateRange(Request $request): void
+    {
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ], [
+            'to.after_or_equal' => 'Tanggal akhir tidak boleh sebelum tanggal awal.',
         ]);
     }
 

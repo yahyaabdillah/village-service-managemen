@@ -499,8 +499,9 @@ details.import-details[open] > summary { margin-bottom: 1rem; }
 .request-person small { color: var(--muted); font-size: .7rem; }
 
 /* Request operations */
-.request-filters { display: grid; grid-template-columns: minmax(16rem, 1.5fr) minmax(11rem, .7fr) minmax(13rem, 1fr) auto; align-items: end; gap: .75rem; }
+.request-filters { display: grid; grid-template-columns: minmax(14rem, 1.3fr) minmax(10rem, .6fr) minmax(12rem, .9fr) minmax(15rem, .9fr) auto; align-items: end; gap: .75rem; }
 .request-filters label { margin-top: 0; font-size: .75rem; }
+.filter-date-range { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
 .filter-actions { display: flex; gap: .5rem; }
 .input-icon { position: relative; }
 .input-icon svg { position: absolute; left: .8rem; top: 50%; color: var(--muted); transform: translateY(-50%); pointer-events: none; }

@@ -30,7 +30,7 @@ class PermissionCatalog
             'dashboard' => ['label' => 'Dashboard', 'group' => 'Pelayanan', 'description' => 'Ringkasan beban kerja dan tren pengajuan.', 'actions' => ['view']],
             'service-requests' => [
                 'label' => 'Pengajuan surat', 'group' => 'Pelayanan', 'description' => 'Pengajuan warga beserta berkas dan dokumen hasilnya.',
-                'actions' => ['view'],
+                'actions' => ['view', 'export'],
                 'extra' => [
                     'verify' => 'Verifikasi berkas',
                     'process' => 'Proses pengajuan',
@@ -95,7 +95,7 @@ class PermissionCatalog
             'Admin Desa' => $without(['users.', 'roles.', 'activity-logs.', 'whatsapp.manage']),
             'Petugas' => [
                 'dashboard.view',
-                'service-requests.view', 'service-requests.verify', 'service-requests.process', 'service-requests.reject',
+                'service-requests.view', 'service-requests.export', 'service-requests.verify', 'service-requests.process', 'service-requests.reject',
                 'service-requests.complete', 'service-requests.generate-document', 'service-requests.upload-document', 'service-requests.send-whatsapp',
                 'residents.view', 'family-cards.view',
             ],

@@ -375,6 +375,50 @@ class ProductionReadinessTest extends TestCase
             ->assertSee(route('admin.service-requests.show', $visible));
     }
 
+    public function test_admin_request_index_can_be_filtered_by_date_range(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+        $inRange = ServiceRequest::factory()->create(['applicant_name' => 'Dalam Rentang', 'created_at' => '2026-05-15 10:00:00']);
+        ServiceRequest::factory()->create(['applicant_name' => 'Di Luar Rentang', 'created_at' => '2026-06-20 10:00:00']);
+
+        $this->actingAs($admin)->get(route('admin.service-requests.index', ['from' => '2026-05-01', 'to' => '2026-05-31']))
+            ->assertOk()
+            ->assertSee('Dalam Rentang')
+            ->assertDontSee('Di Luar Rentang')
+            ->assertSee(route('admin.service-requests.report'), false);
+
+        // An end date before the start date is a mistake, not a filter: show it as such
+        // rather than silently returning nothing.
+        $this->actingAs($admin)->get(route('admin.service-requests.index', ['from' => '2026-05-31', 'to' => '2026-05-01']))
+            ->assertSessionHasErrors('to');
+    }
+
+    public function test_admin_can_download_the_filtered_request_list_as_pdf(): void
+    {
+        $this->seed();
+        $admin = User::where('email', 'admin@desa.test')->firstOrFail();
+        $service = ServiceType::where('slug', 'surat-keterangan-domisili')->firstOrFail();
+        ServiceRequest::factory()->create(['applicant_name' => 'Laporan Terverifikasi', 'service_type_id' => $service->id, 'status' => 'verified', 'created_at' => '2026-05-15 10:00:00']);
+        ServiceRequest::factory()->create(['applicant_name' => 'Laporan Selesai', 'service_type_id' => $service->id, 'status' => 'completed', 'created_at' => '2026-05-16 10:00:00']);
+
+        $response = $this->actingAs($admin)->get(route('admin.service-requests.report', ['status' => 'verified', 'from' => '2026-05-01', 'to' => '2026-05-31']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $pdf = $response->getContent();
+        $this->assertStringStartsWith('%PDF', $pdf);
+        $this->assertStringContainsString('Laporan Terverifikasi', $pdf);
+        $this->assertStringNotContainsString('Laporan Selesai', $pdf);
+
+        // A clerk without the explicit export permission cannot reach the report, even
+        // though they can see the list it is built from.
+        $viewerOnly = User::factory()->create(['email' => 'viewer-only@example.test']);
+        $viewerOnly->givePermissionTo('service-requests.view');
+        $this->actingAs($viewerOnly)->get(route('admin.service-requests.index'))->assertOk();
+        $this->actingAs($viewerOnly)->get(route('admin.service-requests.report'))->assertForbidden();
+    }
+
     public function test_request_detail_shows_review_data_and_publish_action(): void
     {
         $this->seed();
